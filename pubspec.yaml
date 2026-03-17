@@ -1,0 +1,75 @@
+name: whispr
+description: "Share your thoughts, poems, and stories with the world."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Navigation
+  go_router: ^13.0.0
+
+  # HTTP Client
+  dio: ^5.3.2
+
+  # Database/Auth
+  supabase_flutter: ^2.5.2
+
+  # Sharing
+  share_plus: ^7.2.2
+
+  # Payments
+
+  # Utils
+  intl: ^0.17.0
+  url_launcher: ^6.2.2
+  cached_network_image: ^3.3.0
+  flutter_svg: ^2.0.9
+  shared_preferences: ^2.5.4
+  flutter_html: ^3.0.0-beta.2
+
+  # Push Notifications
+  flutter_local_notifications: ^17.2.4
+  universal_html: ^2.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  riverpod_generator: ^2.3.9
+  build_runner: ^2.4.6
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+# Launcher Icon Configuration
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/launcher_icon.png"
+  web:
+    generate: true
+    image_path: "assets/launcher_icon.png"
+    background_color: "#ffffff"
+
+# Splash Screen Configuration
+flutter_native_splash:
+  color: "#ffffff"
+  color_dark: "#1a1a1a"
+  image: assets/images/darklogo.png
+  image_dark: assets/images/darklogo.png
+  android_12:
+    image: assets/images/darklogo.png
+    image_dark: assets/images/darklogo.png

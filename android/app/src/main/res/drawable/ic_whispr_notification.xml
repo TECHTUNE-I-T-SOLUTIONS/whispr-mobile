@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Stylized hand gesture for whispering/shushing -->
+    <!-- Fingers -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M25,20 L30,20 L32,50 L28,55 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,15 L40,15 L42,55 L38,60 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45,18 L50,18 L50,58 L46,62 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,25 L60,25 L58,55 L54,58 Z" />
+    
+    <!-- Palm/Hand base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,50 L65,45 L68,65 L20,75 Z" />
+    
+    <!-- Thumb -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18,55 L22,52 L25,65 L20,68 Z" />
+</vector>
