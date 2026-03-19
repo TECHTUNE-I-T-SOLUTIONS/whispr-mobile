@@ -14,6 +14,10 @@ on:
   repository_dispatch:
     types: [codemagic-build-success]
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
@@ -62,7 +66,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.codemagic.outputs.version }}
           name: Whispr v${{ steps.codemagic.outputs.version }}
@@ -88,8 +92,7 @@ jobs:
             Thank you for using Whispr! 💜
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Update website download page
