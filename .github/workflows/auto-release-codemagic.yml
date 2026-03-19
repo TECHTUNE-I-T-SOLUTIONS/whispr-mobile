@@ -26,22 +26,29 @@ jobs:
         run: |
           # Fetch latest successful builds from CodeMagic
           curl -s -H "x-auth-token: ${CODEMAGIC_API_TOKEN}" \
-            "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=1" > builds.json
+            "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=10" > builds.json
           
-          # Check if we have a successful build
-          BUILD_ID=$(jq -r '.builds[0].id // empty' builds.json)
-          BUILD_STATUS=$(jq -r '.builds[0].buildStatus // empty' builds.json)
+          # Get iOS and Android builds
+          IOS_BUILD=$(jq -r '.builds[] | select(.platform == "ios" and .buildStatus == "success" and (.artifacts | length > 0)) | first' builds.json)
+          ANDROID_BUILD=$(jq -r '.builds[] | select(.platform == "android" and .buildStatus == "success" and (.artifacts | length > 0)) | first' builds.json)
+          
+          IOS_URL=$(echo "$IOS_BUILD" | jq -r '.artifacts[0].downloadUrl // empty' 2>/dev/null)
+          ANDROID_URL=$(echo "$ANDROID_BUILD" | jq -r '.artifacts[0].downloadUrl // empty' 2>/dev/null)
+          
+          # Get latest build timestamp
           BUILD_TIME=$(jq -r '.builds[0].finishingTime // empty' builds.json)
           
-          if [ -z "$BUILD_ID" ] || [ "$BUILD_STATUS" != "success" ]; then
-            echo "No successful build found"
+          echo "ios_url=${IOS_URL}" >> $GITHUB_OUTPUT
+          echo "android_url=${ANDROID_URL}" >> $GITHUB_OUTPUT
+          echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          
+          if [ -z "$IOS_URL" ] && [ -z "$ANDROID_URL" ]; then
+            echo "No successful builds with artifacts found"
             echo "has_build=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
           echo "has_build=true" >> $GITHUB_OUTPUT
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
           
           # Check if release already exists
           VERSION=$(cat pubspec.yaml | grep "version:" | head -1 | awk '{print $2}' | cut -d '+' -f1)
@@ -60,34 +67,39 @@ jobs:
         if: steps.buildcheck.outputs.should_create == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.buildcheck.outputs.version }}
+          tag_name: v${{ steps.buildcheck.outputs.version }}
           name: Whispr Mobile v${{ steps.buildcheck.outputs.version }}
           body: |
             🎉 **Whispr Mobile v${{ steps.buildcheck.outputs.version }}** is now available!
             
-            ## What's Included
+            ## 📥 Download Links
+            
+            ### iOS
+            - **Direct Download**: [${{ steps.buildcheck.outputs.ios_url != '' && 'Download IPA' || 'Coming Soon' }}](${{ steps.buildcheck.outputs.ios_url }})
+            - App Store (coming soon)
+            - TestFlight
+            
+            ### Android
+            - **Direct Download**: [${{ steps.buildcheck.outputs.android_url != '' && 'Download APK' || 'Coming Soon' }}](${{ steps.buildcheck.outputs.android_url }})
+            - Google Play Store (coming soon)
+            
+            ## 📖 Installation Guide
+            
+            Visit the [Whispr Download Page](https://whispr.vercel.app/download) for detailed installation instructions.
+            
+            ## 📋 Release Details
+            
+            - **Version**: v${{ steps.buildcheck.outputs.version }}
+            - **Release Date**: ${{ steps.buildcheck.outputs.build_time }}
+            - **Platform**: iOS & Android
+            - **Built by**: CodeMagic CI/CD
+            
+            ## ✨ What's Included
+            
             - 📱 iOS build
             - 🤖 Android build
             - 🔐 Latest security updates
-            - ✨ Bug fixes and improvements
-            
-            ## Download
-            
-            Visit the [Whispr Download Page](/download) to get the latest version.
-            
-            ### Installation
-            
-            **iOS**: Available on TestFlight or App Store
-            **Android**: Available on Google Play Store or via APK download
-            
-            ## Build Information
-            
-            - **Built by**: CodeMagic CI/CD
-            - **Build ID**: ${{ steps.buildcheck.outputs.build_id }}
-            - **Release Date**: ${{ steps.buildcheck.outputs.build_time }}
-            - **Platform**: iOS & Android
-            
-            ## Release Notes
+            - 🐛 Bug fixes and improvements
             
             Made with ❤️ by the Whispr team
             

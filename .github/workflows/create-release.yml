@@ -38,9 +38,15 @@ jobs:
           RESPONSE=$(curl -s -H "x-auth-token: ${CODEMAGIC_API_TOKEN}" \
             "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=10")
           
-          # Extract iOS and Android build info
-          IOS_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "ios" and .buildStatus == "success") | .[0]' 2>/dev/null)
-          ANDROID_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "android" and .buildStatus == "success") | .[0]' 2>/dev/null)
+          # Extract iOS build (first successful one)
+          IOS_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "ios" and .buildStatus == "success") | select(.artifacts | length > 0) | first' 2>/dev/null)
+          
+          # Extract Android build (first successful one)
+          ANDROID_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "android" and .buildStatus == "success") | select(.artifacts | length > 0) | first' 2>/dev/null)
+          
+          # Extract download URLs
+          IOS_URL=$(echo "$IOS_BUILD" | jq -r '.artifacts[0].downloadUrl // empty' 2>/dev/null)
+          ANDROID_URL=$(echo "$ANDROID_BUILD" | jq -r '.artifacts[0].downloadUrl // empty' 2>/dev/null)
           
           # Extract version from pubspec.yaml or use provided input
           VERSION="${{ github.event.inputs.version }}"
@@ -58,12 +64,8 @@ jobs:
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo "ios_build<<EOF" >> $GITHUB_OUTPUT
-          echo "$IOS_BUILD" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "android_build<<EOF" >> $GITHUB_OUTPUT
-          echo "$ANDROID_BUILD" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "ios_url=${IOS_URL}" >> $GITHUB_OUTPUT
+          echo "android_url=${ANDROID_URL}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -73,20 +75,26 @@ jobs:
           body: |
             ${{ steps.codemagic.outputs.changelog }}
             
-            ## Installation
-            
-            Visit [Whispr Download Page](/download) to download the latest builds.
+            ## 📥 Download Links
             
             ### iOS
-            Available on App Store (coming soon) or TestFlight
+            - **Direct Download**: [${{ steps.codemagic.outputs.ios_url != '' && 'Download IPA' || 'Coming Soon' }}](${{ steps.codemagic.outputs.ios_url }})
+            - App Store (coming soon)
+            - TestFlight
             
             ### Android
-            Available on Google Play Store (coming soon) or via APK
+            - **Direct Download**: [${{ steps.codemagic.outputs.android_url != '' && 'Download APK' || 'Coming Soon' }}](${{ steps.codemagic.outputs.android_url }})
+            - Google Play Store (coming soon)
             
-            ## Release Details
+            ## 📖 Installation Guide
+            
+            Visit [Whispr Download Page](https://whispr.vercel.app/download) for detailed installation instructions.
+            
+            ## 📋 Release Details
             
             - **Version**: v${{ steps.codemagic.outputs.version }}
-            - **Date**: ${{ github.event.repository.updated_at }}
+            - **Date**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            - **Platform**: iOS & Android
             - **Build**: CodeMagic CI/CD
             
             Thank you for using Whispr! 💜
