@@ -40,19 +40,30 @@ jobs:
           
           echo "$RESPONSE" > /tmp/builds.json
           
-          # Extract download URLs from builds (CodeMagic uses "artefacts" not "artifacts")
-          # Look for APK and AAB files from Android builds, IPA files from iOS builds
-          IOS_URL=$(jq -r '.builds[] | select(.workflow.buildSettings.platforms[]? == "ios") | .artefacts[]? | select(.name | endswith(".ipa")) | .url | select(. != null) | first' /tmp/builds.json)
-          ANDROID_URL=$(jq -r '.builds[] | select(.workflow.buildSettings.platforms[]? == "android") | .artefacts[]? | select(.name | endswith(".apk") or endswith(".aab")) | .url | select(. != null) | first' /tmp/builds.json)
+          # Debug: Print response for troubleshooting
+          echo "API Response:"
+          cat /tmp/builds.json
+          echo ""
           
-          # Fallback: if no specific artifact found, get any artifact from successful builds
-          if [ -z "$IOS_URL" ]; then
-            IOS_URL=$(jq -r '.builds[] | select(.status == "finished" and (.artefacts | length > 0)) | .artefacts[]? | .url | select(. != null) | first' /tmp/builds.json | head -1)
+          # Check if response is valid JSON and has builds
+          if ! jq empty /tmp/builds.json 2>/dev/null; then
+            echo "❌ Invalid API response. Check CODEMAGIC_API_TOKEN and CODEMAGIC_APP_ID"
+            VERSION=$(grep "version:" pubspec.yaml | head -1 | awk '{print $2}' | cut -d '+' -f1)
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "Release v${VERSION}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "ios_url=" >> $GITHUB_OUTPUT
+            echo "android_url=" >> $GITHUB_OUTPUT
+            exit 0
           fi
           
-          if [ -z "$ANDROID_URL" ]; then
-            ANDROID_URL=$(jq -r '.builds[] | select(.status == "finished" and (.artefacts | length > 0)) | .artefacts[]? | .url | select(. != null) | first' /tmp/builds.json | tail -1)
-          fi
+          # Try to extract artifacts from builds
+          ARTIFACTS=$(jq -r '.builds[]?.artefacts[]? | select(.url != null) | .url' /tmp/builds.json 2>/dev/null | head -5)
+          
+          echo "Found artifacts:"
+          echo "$ARTIFACTS"
+          echo ""
           
           # Extract version from pubspec.yaml or use provided input
           VERSION="${{ github.event.inputs.version }}"
@@ -63,15 +74,17 @@ jobs:
           # Extract changelog
           CHANGELOG="${{ github.event.inputs.changelog }}"
           if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="Release v${VERSION}\n\n📱 iOS and Android builds available\n\nBuilt with CodeMagic CI/CD"
+            CHANGELOG="Release v${VERSION}\n\nBuilt with CodeMagic CI/CD"
           fi
+          
+          # Get first artifact as download URL if available
+          DOWNLOAD_URL=$(echo "$ARTIFACTS" | head -1)
           
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo "ios_url=${IOS_URL}" >> $GITHUB_OUTPUT
-          echo "android_url=${ANDROID_URL}" >> $GITHUB_OUTPUT
+          echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -81,22 +94,21 @@ jobs:
           body: |
             ${{ steps.codemagic.outputs.changelog }}
             
-            ## 📥 Download Links
+            ## 📥 Download
             
-            ### iOS
-            - **Direct Download**: [${{ steps.codemagic.outputs.ios_url != '' && 'Download IPA' || 'Coming Soon' }}](${{ steps.codemagic.outputs.ios_url }})
-            - App Store (coming soon)
-            - TestFlight
-            
-            ### Android
-            - **Direct Download**: [${{ steps.codemagic.outputs.android_url != '' && 'Download APK' || 'Coming Soon' }}](${{ steps.codemagic.outputs.android_url }})
-            - Google Play Store (coming soon)
+            ${{ steps.codemagic.outputs.download_url != '' && format('📱 [Download APK/IPA]({0})', steps.codemagic.outputs.download_url) || '🔄 Building... Download link will appear shortly' }}
             
             ## 📖 Installation Guide
             
             Visit [Whispr Download Page](https://whispr.vercel.app/download) for detailed installation instructions.
             
             ## 📋 Release Details
+            
+            - **Version**: v${{ steps.codemagic.outputs.version }}
+            - **Date**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            - **Built with**: CodeMagic CI/CD
+            
+            Thank you for using Whispr! 💜
             
             - **Version**: v${{ steps.codemagic.outputs.version }}
             - **Date**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
