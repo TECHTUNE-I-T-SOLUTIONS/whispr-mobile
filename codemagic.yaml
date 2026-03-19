@@ -34,8 +34,8 @@ workflows:
           # Run the GitHub release script
           ./scripts/create-github-release.sh
     artifacts:
-      - build/android/app/outputs/apk/release/*.apk
-      - build/android/app/outputs/bundle/release/*.aab
+      - build/app/outputs/apk/release/*.apk
+      - build/app/outputs/bundle/release/*.aab
     publishing:
       email:
         recipients:
