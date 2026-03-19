@@ -181,6 +181,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         title: const Text('Notifications'),
         backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/home'),
+        ),
         actions: [
           if (_notifications.any((n) => !n.isRead))
             TextButton(

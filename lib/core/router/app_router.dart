@@ -14,7 +14,9 @@ import '../../features/writing_chains/presentation/create_chain_screen.dart';
 import '../../features/writing_chains/presentation/chain_entries_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/profile/presentation/profile_details_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
+import '../../features/spoken_words/presentation/spoken_words_screen.dart';
 import '../../shared/widgets/main_layout.dart';
 import '../../shared/widgets/post_detail_screen.dart';
 import '../../shared/widgets/creator_profile_screen.dart';
@@ -68,6 +70,10 @@ final router = GoRouter(
           builder: (context, state) => const WhisprWallScreen(),
         ),
         GoRoute(
+          path: '/spoken-words',
+          builder: (context, state) => const SpokenWordsScreen(),
+        ),
+        GoRoute(
           path: '/writing-chains',
           builder: (context, state) => const WritingChainsScreen(),
         ),
@@ -89,6 +95,10 @@ final router = GoRouter(
         GoRoute(
           path: '/more',
           builder: (context, state) => const ProfileScreen(),
+        ),
+        GoRoute(
+          path: '/profile-details',
+          builder: (context, state) => const ProfileDetailsScreen(),
         ),
         // Post details
         GoRoute(

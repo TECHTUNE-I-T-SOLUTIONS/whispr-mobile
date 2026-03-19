@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart' as dio;
@@ -19,7 +20,7 @@ class ApiService {
 
   late final dio.Dio _dio;
   SharedPreferences? _prefs;
-  bool _isInitialized = false;
+  final Completer<void> _initCompleter = Completer<void>();
 
   // Private constructor
   ApiService._internal() {
@@ -32,29 +33,32 @@ class ApiService {
   }
 
   Future<void> _initService() async {
-    if (_isInitialized) return;
+    if (_initCompleter.isCompleted) return;
 
-    _prefs = await SharedPreferences.getInstance();
-    _dio = dio.Dio(
-      dio.BaseOptions(
-        baseUrl: AppConstants.baseUrl,
-        connectTimeout: AppConstants.apiTimeout,
-        receiveTimeout: AppConstants.apiTimeout,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        validateStatus: (status) => status != null && status < 500, // Accept 4xx errors for custom handling
-      ),
-    );
-    _setupInterceptors();
-    _isInitialized = true;
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      _dio = dio.Dio(
+        dio.BaseOptions(
+          baseUrl: AppConstants.baseUrl,
+          connectTimeout: AppConstants.apiTimeout,
+          receiveTimeout: AppConstants.apiTimeout,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          validateStatus: (status) => status != null && status < 500, // Accept 4xx errors for custom handling
+        ),
+      );
+      _setupInterceptors();
+      _initCompleter.complete();
+    } catch (e) {
+      _initCompleter.completeError(e);
+      rethrow;
+    }
   }
 
-  Future<void> _ensureInitialized() async {
-    if (!_isInitialized) {
-      await _initService();
-    }
+  Future<void> ensureInitialized() async {
+    return _initCompleter.future;
   }
 
   void _setupInterceptors() {
@@ -62,7 +66,7 @@ class ApiService {
       // Auth interceptor
       dio.InterceptorsWrapper(
         onRequest: (options, handler) async {
-          await _ensureInitialized();
+          await ensureInitialized();
           final token = _prefs?.getString(AppConstants.accessTokenKey);
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -70,7 +74,7 @@ class ApiService {
           handler.next(options);
         },
         onError: (error, handler) async {
-          await _ensureInitialized();
+          await ensureInitialized();
           
           // Handle token expiration (401 or 403)
           if ((error.response?.statusCode == 401 || error.response?.statusCode == 403)) {
@@ -119,8 +123,6 @@ class ApiService {
           request: true,
           requestHeader: true,
           requestBody: true,
-          responseHeader: true,
-          responseBody: true,
           error: true,
         ),
     ]);
@@ -132,7 +134,7 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     T Function(dynamic)? fromJson,
   }) async {
-    await _ensureInitialized();
+    await ensureInitialized();
     try {
       final response = await _dio.get(path, queryParameters: queryParameters);
       return fromJson != null ? fromJson(response.data) : response.data as T;
@@ -148,7 +150,7 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     T Function(dynamic)? fromJson,
   }) async {
-    await _ensureInitialized();
+    await ensureInitialized();
     try {
       final response = await _dio.post(
         path,
@@ -168,7 +170,7 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     T Function(dynamic)? fromJson,
   }) async {
-    await _ensureInitialized();
+    await ensureInitialized();
     try {
       final response = await _dio.put(
         path,
@@ -188,7 +190,7 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     T Function(dynamic)? fromJson,
   }) async {
-    await _ensureInitialized();
+    await ensureInitialized();
     try {
       final response = await _dio.delete(
         path,
@@ -209,7 +211,7 @@ class ApiService {
     Map<String, dynamic>? additionalData,
     T Function(dynamic)? fromJson,
   }) async {
-    await _ensureInitialized();
+    await ensureInitialized();
     try {
       final formData = dio.FormData.fromMap({
         fieldName: await dio.MultipartFile.fromFile(file.path),

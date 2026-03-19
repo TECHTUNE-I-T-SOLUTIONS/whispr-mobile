@@ -120,17 +120,17 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
       body: widget.child,
       bottomNavigationBar: Container(
         height: 80,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isDark
                 ? [
-                    const Color(0xFF1A1A1A),
-                    const Color(0xFF2A2A2A),
+                    const Color(0xFF1A1A1A).withValues(alpha: 0.8),
+                    const Color(0xFF2A2A2A).withValues(alpha: 0.6),
                   ]
                 : [
-                    Colors.white,
-                    const Color(0xFFF8F9FA),
+                    Colors.white.withValues(alpha: 0.8),
+                    const Color(0xFFF8F9FA).withValues(alpha: 0.6),
                   ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -150,8 +150,8 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(25),
           child: BackdropFilter(
-            filter: const ColorFilter.mode(
-              Colors.transparent,
+            filter: ColorFilter.mode(
+              Colors.black.withValues(alpha: 0.1),
               BlendMode.srcOver,
             ),
             child: Row(
@@ -182,11 +182,11 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
               ? LinearGradient(
                   colors: isDark
                       ? [
-                          AppTheme.primaryColor.withValues(alpha: 0.2),
+                          AppTheme.primaryColor.withValues(alpha: 0.3),
                           AppTheme.primaryColor.withValues(alpha: 0.1),
                         ]
                       : [
-                          AppTheme.primaryColor.withValues(alpha: 0.15),
+                          AppTheme.primaryColor.withValues(alpha: 0.2),
                           AppTheme.primaryColor.withValues(alpha: 0.05),
                         ],
                   begin: Alignment.topCenter,
@@ -194,6 +194,15 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
                 )
               : null,
           borderRadius: BorderRadius.circular(20),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

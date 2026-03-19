@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
-import 'core/services/push_notification_service.dart';
 import 'core/services/session_manager.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/supabase_auth_provider.dart';
 import 'features/theme/theme_provider.dart';
 
 void main() async {
@@ -35,6 +33,7 @@ class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserv
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Session manager for handling session expiration checks
     SessionManager().initializeSession();
   }
 

@@ -71,6 +71,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     });
   }
 
+  // ignore: unused_element
   Future<void> _toggleNotifications(bool value) async {
     setState(() {
       _notificationsEnabled = value;
@@ -84,6 +85,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     }
   }
 
+  // ignore: unused_element
   Future<void> _launchUrl(String url) async {
     final Uri uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -97,6 +99,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     }
   }
 
+  // ignore: unused_element
   void _showThemeSelectionDialog() {
     final themeNotifier = ref.read(themeModeProvider.notifier);
     final currentTheme = ref.read(themeModeProvider);
@@ -161,6 +164,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     );
   }
 
+  // ignore: unused_element
   void _showHelpAndSupport() {
     showDialog(
       context: context,
@@ -229,6 +233,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     );
   }
 
+  // ignore: unused_element
   void _showSignOutConfirmation() {
     showDialog(
       context: context,
@@ -410,53 +415,71 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
   }
 
   Widget _buildUserCard(AuthState authState) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryColor.withValues(alpha: 0.1),
-            AppTheme.primaryColor.withValues(alpha: 0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: () => context.push('/profile-details'),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.primaryColor.withValues(alpha: 0.1),
+              AppTheme.primaryColor.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.2),
+            width: 1,
+          ),
         ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryColor.withValues(alpha: 0.2),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Hero(
-            tag: 'user-avatar',
-            child: CircleAvatar(
-              radius: 30,
-              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
-              child: authState.user!.profileImageUrl != null && authState.user!.profileImageUrl!.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: authState.user!.profileImageUrl!,
-                      imageBuilder: (context, imageProvider) => Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          image: DecorationImage(
-                            image: imageProvider,
-                            fit: BoxFit.cover,
+        child: Row(
+          children: [
+            Hero(
+              tag: 'user-avatar',
+              child: CircleAvatar(
+                radius: 30,
+                backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                child: authState.user!.profileImageUrl != null && authState.user!.profileImageUrl!.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: authState.user!.profileImageUrl!,
+                        imageBuilder: (context, imageProvider) => Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            image: DecorationImage(
+                              image: imageProvider,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
-                      ),
-                      placeholder: (context, url) => SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppTheme.primaryColor.withValues(alpha: 0.6),
+                        placeholder: (context, url) => SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppTheme.primaryColor.withValues(alpha: 0.6),
+                            ),
                           ),
                         ),
-                      ),
-                      errorWidget: (context, url, error) => Text(
+                        errorWidget: (context, url, error) => Text(
+                          authState.user!.penName.isNotEmpty
+                              ? authState.user!.penName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
+                        ),
+                        fadeInDuration: const Duration(milliseconds: 300),
+                        fadeOutDuration: const Duration(milliseconds: 300),
+                        httpHeaders: const {
+                          'User-Agent': 'Whispr-Mobile-App/1.0',
+                        },
+                      )
+                    : Text(
                         authState.user!.penName.isNotEmpty
                             ? authState.user!.penName[0].toUpperCase()
                             : '?',
@@ -466,62 +489,51 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
                           fontSize: 20,
                         ),
                       ),
-                      fadeInDuration: const Duration(milliseconds: 300),
-                      fadeOutDuration: const Duration(milliseconds: 300),
-                      httpHeaders: const {
-                        'User-Agent': 'Whispr-Mobile-App/1.0',
-                      },
-                    )
-                  : Text(
-                      authState.user!.penName.isNotEmpty
-                          ? authState.user!.penName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    authState.user!.penName,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    authState.user!.email,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).textTheme.bodyMedium?.color?.withAlpha((0.7 * 255).toInt()),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Creator',
+                      style: TextStyle(
                         color: AppTheme.primaryColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ),
+                ],
+              ),
             ),
+            Icon(
+              Icons.arrow_forward,
+              color: AppTheme.primaryColor.withValues(alpha: 0.6),
             ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  authState.user!.penName,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  authState.user!.email,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).textTheme.bodyMedium?.color?.withAlpha((0.7 * 255).toInt()),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Creator',
-                    style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -604,6 +616,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
             title: 'Whispr Wall',
             subtitle: 'Community discussions',
             onTap: () => context.go('/whispr-wall'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
+            icon: Icons.audiotrack_outlined,
+            title: 'Spoken Words',
+            subtitle: 'Audio and video content',
+            onTap: () => context.go('/spoken-words'),
           ),
           _buildDivider(),
           _buildFeatureItem(

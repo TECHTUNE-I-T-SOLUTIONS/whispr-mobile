@@ -118,12 +118,25 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
         throw Exception(response['error'] ?? 'Failed to load chain details');
       }
     } catch (e) {
+      String errorMessage = 'Failed to load chain details';
+      final errorStr = e.toString();
+      final runtimeTypeName = e.runtimeType.toString();
+      
+      // Handle 401 unauthorized errors - session expired
+      if (runtimeTypeName.contains('UnauthorizedException') ||
+          errorStr.contains('UnauthorizedException') ||
+          errorStr.contains('401') || errorStr.contains('Unauthorized') || 
+          errorStr.contains('invalid JWT') || errorStr.contains('token is expired')) {
+        errorMessage = 'Your session has expired. Please log in again.';
+      }
+      
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = errorMessage;
           _isLoading = false;
         });
       }
+      debugPrint('Error fetching chain details: $e');
     }
   }
 
@@ -216,17 +229,7 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (mounted) {
-              // Use canPop to safely check if we can navigate back
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              } else {
-                // If can't pop, navigate to home as fallback
-                context.go('/home');
-              }
-            }
-          },
+          onPressed: () => context.go('/writing-chains'),
         ),
         title: Text(_chain?.title ?? 'Chain Entries'),
         backgroundColor: Theme.of(context).cardColor,
@@ -408,44 +411,22 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
                       ),
                       const SizedBox(height: AppTheme.spacingS),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          Icon(
-                            Icons.favorite_outline,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          _buildEngagementButton(
+                            icon: Icons.favorite_outline,
+                            label: '${entry.post?.likesCount ?? 0}',
+                            onPressed: () => _handleLike(entry),
                           ),
-                          const SizedBox(width: AppTheme.spacingXS),
-                          Text(
-                            '${entry.post?.likesCount ?? 0}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
+                          _buildEngagementButton(
+                            icon: Icons.comment_outlined,
+                            label: '${entry.post?.commentsCount ?? 0}',
+                            onPressed: () => _handleComment(entry),
                           ),
-                          const SizedBox(width: AppTheme.spacingM),
-                          Icon(
-                            Icons.comment_outlined,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                          const SizedBox(width: AppTheme.spacingXS),
-                          Text(
-                            '${entry.post?.commentsCount ?? 0}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          const SizedBox(width: AppTheme.spacingM),
-                          Icon(
-                            Icons.share_outlined,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                          const SizedBox(width: AppTheme.spacingXS),
-                          Text(
-                            '${entry.post?.sharesCount ?? 0}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
+                          _buildEngagementButton(
+                            icon: Icons.share_outlined,
+                            label: '${entry.post?.sharesCount ?? 0}',
+                            onPressed: () => _handleShare(entry),
                           ),
                         ],
                       ),
@@ -478,6 +459,145 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
         ],
       ),
     );
+  }
+
+  Widget _buildEngagementButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: AppTheme.spacingXS),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleLike(ChainEntry entry) async {
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      final response = await apiService.post(
+        '/chronicles/chains/${widget.chainId}/entries/${entry.id}/engage',
+        data: { 'action': 'like' },
+      );
+
+      if (response['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Liked!')),
+          );
+        }
+        // Update local state if needed
+      } else {
+        throw Exception(response['error'] ?? 'Failed to like');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleComment(ChainEntry entry) async {
+    final commentController = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Comment'),
+        content: TextField(
+          controller: commentController,
+          decoration: const InputDecoration(
+            labelText: 'Your comment',
+            hintText: 'Share your thoughts...',
+          ),
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (commentController.text.trim().isNotEmpty) {
+                Navigator.of(context).pop(commentController.text.trim());
+              }
+            },
+            child: const Text('Post'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      try {
+        final apiService = ref.read(apiServiceProvider);
+        final response = await apiService.post(
+          '/chronicles/chains/${widget.chainId}/entries/${entry.id}/comments',
+          data: { 'content': result },
+        );
+
+        if (response['success'] == true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Comment posted!')),
+            );
+            _fetchChainDetails();
+          }
+        } else {
+          throw Exception(response['error'] ?? 'Failed to post comment');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleShare(ChainEntry entry) async {
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      final response = await apiService.post(
+        '/chronicles/chains/${widget.chainId}/entries/${entry.id}/engage',
+        data: { 'action': 'share' },
+      );
+
+      if (response['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Shared!')),
+          );
+        }
+      } else {
+        throw Exception(response['error'] ?? 'Failed to share');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 }
 

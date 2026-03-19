@@ -218,17 +218,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (mounted) {
-              // Use canPop to safely check if we can navigate back
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              } else {
-                // If can't pop, navigate to home as fallback
-                context.go('/home');
-              }
-            }
-          },
+          onPressed: () => context.go('/chronicles'),
         ),
         title: const Text('Post Details'),
         backgroundColor: Theme.of(context).cardColor,

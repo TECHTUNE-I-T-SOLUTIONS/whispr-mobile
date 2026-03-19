@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import '../../../core/models/post.dart';
 import '../../../core/network/api_service.dart';
@@ -18,7 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStateMixin {
   List<Post> _posts = [];
   bool _isLoading = true;
   String? _error;
@@ -27,17 +28,92 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const String _feedCacheKey = 'feed_cache';
   static const String _feedCacheTimeKey = 'feed_cache_time';
   static const Duration _cacheDuration = Duration(minutes: 5); // Cache for 5 minutes
+  bool _animationsPlayed = false; // Prevent animations from restarting
+
+  late AnimationController _heroAnimationController;
+  late AnimationController _cardAnimationController;
+  late AnimationController _statsAnimationController;
+  late AnimationController _floatingAnimationController;
+  late AnimationController _shimmerAnimationController;
 
   @override
   void initState() {
     super.initState();
-    _initPrefs().then((_) => _loadCachedPosts());
+    _setupAnimations();
+    // Initialize preferences and load feed data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _initAndLoadFeed();
+      }
+    });
   }
 
+  Future<void> _initAndLoadFeed() async {
+    await _initPrefs();
+    await _loadCachedPosts();
+  }
+
+  @override
+  void dispose() {
+    _heroAnimationController.dispose();
+    _cardAnimationController.dispose();
+    _statsAnimationController.dispose();
+    _floatingAnimationController.dispose();
+    _shimmerAnimationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Only play animations once when screen first loads
+    if (!_animationsPlayed) {
+      _animationsPlayed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _heroAnimationController.forward();
+          _cardAnimationController.forward();
+          _statsAnimationController.forward();
+        }
+      });
+    }
+  }
+
+  void _setupAnimations() {
+    _heroAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    
+    _cardAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    
+    _statsAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    // Floating animation controller - continuous looping
+    _floatingAnimationController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    // Shimmer animation controller - continuous looping for glow effect
+    _shimmerAnimationController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+  }
+
+  // ignore: unused_element
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
   }
 
+  // ignore: unused_element
   Future<void> _loadCachedPosts() async {
     if (_prefs == null) return;
 
@@ -89,20 +165,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final allPosts = (response['posts'] as List).map((json) => Post.fromJson(json)).toList();
         // Filter to only show admin posts
         final adminPosts = allPosts.where((post) => post.source == 'admin').toList();
-        setState(() {
-          _posts = adminPosts;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _posts = adminPosts;
+            _isLoading = false;
+          });
+        }
         // Cache the posts
         await _savePostsToCache(adminPosts);
       } else {
         throw Exception(response['error'] ?? 'Failed to load feed');
       }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Network error. Please check your connection.';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -129,27 +209,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
 
       // Update local state based on the action
-      setState(() {
-        final index = _posts.indexWhere((p) => p.id == post.id);
-        if (index != -1) {
-          final currentPost = _posts[index];
-          int newLikesCount = currentPost.likesCount ?? 0;
+      if (mounted) {
+        setState(() {
+          final index = _posts.indexWhere((p) => p.id == post.id);
+          if (index != -1) {
+            final currentPost = _posts[index];
+            int newLikesCount = currentPost.likesCount ?? 0;
 
-          if (response['action'] == 'added') {
-            newLikesCount++;
-          } else if (response['action'] == 'removed') {
-            newLikesCount = (newLikesCount > 0) ? newLikesCount - 1 : 0;
-          } else if (response['action'] == 'updated') {
-            // Count might not change if replacing another reaction
+            if (response['action'] == 'added') {
+              newLikesCount++;
+            } else if (response['action'] == 'removed') {
+              newLikesCount = (newLikesCount > 0) ? newLikesCount - 1 : 0;
+            } else if (response['action'] == 'updated') {
+              // Count might not change if replacing another reaction
+            }
+
+            final updatedPost = currentPost.copyWith(
+              likesCount: newLikesCount,
+              userReaction: response['action'] == 'added' || response['action'] == 'updated' ? 'like' : null,
+            );
+            _posts[index] = updatedPost;
           }
-
-          final updatedPost = currentPost.copyWith(
-            likesCount: newLikesCount,
-            userReaction: response['action'] == 'added' || response['action'] == 'updated' ? 'like' : null,
-          );
-          _posts[index] = updatedPost;
-        }
-      });
+        });
+      }
 
       if (mounted) {
         final message = (response['action'] == 'added' || response['action'] == 'updated') ? 'Post liked!' : 'Like removed!';
@@ -239,14 +321,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _searchPosts() {
     showSearch(
       context: context,
-      delegate: PostSearchDelegate(_posts),
+      delegate: GlobalSearchDelegate(_posts, context),
     );
   }
 
   Future<void> _sharePost(Post post) async {
     try {
       // Construct the appropriate URL based on post type
-      final baseUrl = 'https://whisprwords.vercel.app';
+      final baseUrl = 'https://whispr.vercel.app';
       String url;
 
       switch (post.type.toLowerCase()) {
@@ -343,66 +425,156 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         slivers: [
                           // Hero Section
                           SliverToBoxAdapter(
-                            child: Container(
-                              height: 200,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    AppTheme.primaryColor.withValues(alpha: 0.8),
-                                    AppTheme.primaryColor.withValues(alpha: 0.4),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                            child: FadeTransition(
+                              opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
+                                CurvedAnimation(parent: _heroAnimationController, curve: Curves.easeIn),
                               ),
-                              child: Stack(
-                                children: [
-                                  Positioned.fill(
-                                    child: Opacity(
-                                      opacity: 0.1,
-                                      child: Container(
-                                        decoration: const BoxDecoration(
-                                          image: DecorationImage(
-                                            image: AssetImage('assets/images/Whispr.png'),
-                                            fit: BoxFit.cover,
+                              child: SlideTransition(
+                                position: Tween<Offset>(begin: const Offset(0, -0.2), end: Offset.zero).animate(
+                                  CurvedAnimation(parent: _heroAnimationController, curve: Curves.easeOut),
+                                ),
+                                child: Container(
+                                  height: 240,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppTheme.primaryColor.withValues(alpha: 0.8),
+                                        AppTheme.primaryColor.withValues(alpha: 0.4),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
+                                  child: Stack(
+                                    children: [
+                                      // Animated background gradient
+                                      Positioned.fill(
+                                        child: ShaderMask(
+                                          shaderCallback: (bounds) {
+                                            return LinearGradient(
+                                              colors: [
+                                                Colors.transparent,
+                                                AppTheme.primaryColor.withValues(alpha: 0.1),
+                                              ],
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                            ).createShader(bounds);
+                                          },
+                                          child: Opacity(
+                                            opacity: 0.1,
+                                            child: Container(
+                                              decoration: const BoxDecoration(
+                                                image: DecorationImage(
+                                                  image: AssetImage('assets/images/Whispr.png'),
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
+                                      // Animated scrolling light effect
+                                      Positioned.fill(
+                                        child: AnimatedBuilder(
+                                          animation: _heroAnimationController,
+                                          builder: (context, child) {
+                                            return Container(
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Colors.transparent,
+                                                    Colors.white.withValues(alpha: 0.1),
+                                                    Colors.transparent,
+                                                  ],
+                                                  stops: [
+                                                    0.0,
+                                                    _heroAnimationController.value,
+                                                    1.0,
+                                                  ],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      // Shimmering light glow effect
+                                      Positioned.fill(
+                                        child: AnimatedBuilder(
+                                          animation: _shimmerAnimationController,
+                                          builder: (context, child) {
+                                            final angle = _shimmerAnimationController.value * 6.28; // 2π
+                                            return Container(
+                                              decoration: BoxDecoration(
+                                                gradient: RadialGradient(
+                                                  center: Alignment(
+                                                    0.5 + 0.3 * math.cos(angle),
+                                                    0.3 + 0.2 * math.sin(angle),
+                                                  ),
+                                                  radius: 1.5,
+                                                  colors: [
+                                                    Colors.white.withValues(alpha: 0.15),
+                                                    Colors.white.withValues(alpha: 0.05),
+                                                    Colors.transparent,
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppTheme.spacingL,
+                                          vertical: AppTheme.spacingM,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              'Welcome to Whispr',
+                                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 28,
+                                              ),
+                                            ),
+                                            const SizedBox(height: AppTheme.spacingXS),
+                                            Text(
+                                              'Discover inspiring words, poems, and chronicles from our community',
+                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: Colors.white.withValues(alpha: 0.9),
+                                              ),
+                                            ),
+                                            const SizedBox(height: AppTheme.spacingS),
+                                            ScaleTransition(
+                                              scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                                                CurvedAnimation(
+                                                  parent: _heroAnimationController,
+                                                  curve: const Interval(0.5, 1.0, curve: Curves.elasticOut),
+                                                ),
+                                              ),
+                                              child: ElevatedButton(
+                                                onPressed: () => context.go('/chronicles'),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.white,
+                                                  foregroundColor: AppTheme.primaryColor,
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: AppTheme.spacingM,
+                                                    vertical: AppTheme.spacingXS,
+                                                  ),
+                                                ),
+                                                child: const Text('Explore Chronicles'),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(AppTheme.spacingL),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          'Welcome to Whispr',
-                                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: AppTheme.spacingS),
-                                        Text(
-                                          'Discover inspiring words, poems, and chronicles from our community',
-                                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                            color: Colors.white.withValues(alpha: 0.9),
-                                          ),
-                                        ),
-                                        const SizedBox(height: AppTheme.spacingM),
-                                        ElevatedButton(
-                                          onPressed: () => context.go('/chronicles'),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.white,
-                                            foregroundColor: AppTheme.primaryColor,
-                                          ),
-                                          child: const Text('Explore Chronicles'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
@@ -411,13 +583,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           SliverToBoxAdapter(
                             child: Padding(
                               padding: const EdgeInsets.all(AppTheme.spacingM),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  _buildStatCard('Posts', _posts.length.toString(), Icons.article),
-                                  _buildStatCard('Poems', _posts.where((p) => p.type == 'poem').length.toString(), Icons.format_quote),
-                                  _buildStatCard('Blogs', _posts.where((p) => p.type == 'blog').length.toString(), Icons.book),
-                                ],
+                              child: ScaleTransition(
+                                scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                                  CurvedAnimation(parent: _statsAnimationController, curve: Curves.elasticOut),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    _buildAnimatedStatCard(
+                                      'Chronicles',
+                                      '1',
+                                      Icons.history,
+                                      () => context.go('/chronicles'),
+                                      0,
+                                    ),
+                                    _buildAnimatedStatCard(
+                                      'Whispr Wall',
+                                      '1',
+                                      Icons.forum,
+                                      () => context.go('/whispr-wall'),
+                                      1,
+                                    ),
+                                    _buildAnimatedStatCard(
+                                      'Chains',
+                                      '1',
+                                      Icons.link,
+                                      () => context.go('/writing-chains'),
+                                      2,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -439,9 +634,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                     children: [
-                                      _buildCategoryCard('Poems', Icons.format_quote, Colors.purple, () => context.go('/poems')),
-                                      _buildCategoryCard('Blogs', Icons.book, Colors.blue, () => context.go('/blogs')),
-                                      _buildCategoryCard('Chronicles', Icons.history, Colors.green, () => context.go('/chronicles')),
+                                      _buildAnimatedCategoryCard(
+                                        'Chronicles',
+                                        Icons.history,
+                                        Colors.orange.shade600,
+                                        () => context.go('/chronicles'),
+                                        0,
+                                      ),
+                                      _buildAnimatedCategoryCard(
+                                        'Whispr Wall',
+                                        Icons.forum,
+                                        Colors.blue.shade600,
+                                        () => context.go('/whispr-wall'),
+                                        1,
+                                      ),
+                                      _buildAnimatedCategoryCard(
+                                        'Write Chain',
+                                        Icons.link,
+                                        Colors.green.shade600,
+                                        () => context.go('/writing-chains'),
+                                        2,
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -785,48 +998,253 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingM),
-        child: Column(
-          children: [
-            Icon(icon, color: AppTheme.primaryColor, size: 32),
-            const SizedBox(height: AppTheme.spacingS),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryColor,
+  Widget _buildAnimatedStatCard(
+    String title,
+    String value,
+    IconData icon,
+    VoidCallback onTap,
+    int index,
+  ) {
+    final staggeredAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _statsAnimationController,
+        curve: Interval(
+          index * 0.15,
+          1.0,
+          curve: Curves.easeOut,
+        ),
+      ),
+    );
+
+    // Floating animation with delay for each index
+    final floatingAnimation = Tween<double>(begin: 0, end: 8).animate(
+      CurvedAnimation(parent: _floatingAnimationController, curve: Curves.easeInOut),
+    );
+
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.8, end: 1.0).animate(staggeredAnimation),
+      child: FadeTransition(
+        opacity: staggeredAnimation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: Offset(0, -floatingAnimation.value / 100),
+            end: Offset(0, floatingAnimation.value / 100),
+          ).animate(_floatingAnimationController),
+          child: MouseRegion(
+            onEnter: (_) => _handleCardHover(),
+            child: Card(
+              elevation: 8,
+              shadowColor: AppTheme.primaryColor.withValues(alpha: 0.3),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingM),
+                    child: Column(
+                      children: [
+                        Icon(icon, color: AppTheme.primaryColor, size: 36),
+                        const SizedBox(height: AppTheme.spacingS),
+                        Text(
+                          value,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                            shadows: [
+                              Shadow(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.5),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildAnimatedCategoryCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+    int index,
+  ) {
+    final staggeredAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _cardAnimationController,
+        curve: Interval(
+          index * 0.2,
+          1.0,
+          curve: Curves.easeOut,
+        ),
+      ),
+    );
+
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.8, end: 1.0).animate(staggeredAnimation),
+      child: SlideTransition(
+        position: Tween<Offset>(begin: Offset(0, 0.3), end: Offset.zero).animate(staggeredAnimation),
+        child: FadeTransition(
+          opacity: staggeredAnimation,
+          child: GestureDetector(
+            onTap: onTap,
+            child: Card(
+              elevation: 6,
+              shadowColor: color.withValues(alpha: 0.3),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.15),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingM),
+                  child: Column(
+                    children: [
+                      ScaleTransition(
+                        scale: Tween<double>(begin: 0.8, end: 1.1).animate(
+                          CurvedAnimation(
+                            parent: _cardAnimationController,
+                            curve: Interval(
+                              0.5 + index * 0.15,
+                              1.0,
+                              curve: Curves.elasticOut,
+                            ),
+                          ),
+                        ),
+                        child: Icon(icon, color: color, size: 40),
+                      ),
+                      const SizedBox(height: AppTheme.spacingS),
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleCardHover() {
+    // Can be used for additional hover effects if needed
+  }
+
+  // ignore: unused_element
+  Widget _buildStatCard(String title, String value, IconData icon, VoidCallback onTap) {
+    return Card(
+      elevation: 8,
+      shadowColor: AppTheme.primaryColor.withValues(alpha: 0.3),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingM),
+            child: Column(
+              children: [
+                Icon(icon, color: AppTheme.primaryColor, size: 32),
+                const SizedBox(height: AppTheme.spacingS),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                    shadows: [
+                      Shadow(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.5),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
   Widget _buildCategoryCard(String title, IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingM),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: AppTheme.spacingS),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+        elevation: 6,
+        shadowColor: color.withValues(alpha: 0.3),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.15),
+                blurRadius: 10,
+                spreadRadius: 1,
               ),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingM),
+            child: Column(
+              children: [
+                Icon(icon, color: color, size: 32),
+                const SizedBox(height: AppTheme.spacingS),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1006,10 +1424,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class PostSearchDelegate extends SearchDelegate<Post?> {
-  final List<Post> posts;
+class SearchResult {
+  final String id;
+  final String title;
+  final String subtitle;
+  final String type; // 'post', 'poem', 'blog', 'spoken_word', 'chronicle'
+  final String route;
 
-  PostSearchDelegate(this.posts);
+  SearchResult({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.type,
+    required this.route,
+  });
+}
+
+class GlobalSearchDelegate extends SearchDelegate<SearchResult?> {
+  final List<Post> posts;
+  final BuildContext context;
+
+  GlobalSearchDelegate(this.posts, this.context);
 
   @override
   List<Widget> buildActions(BuildContext context) {
@@ -1033,25 +1468,105 @@ class PostSearchDelegate extends SearchDelegate<Post?> {
     );
   }
 
+  List<SearchResult> _getAllSearchResults() {
+    List<SearchResult> results = [];
+
+    // Add posts
+    for (final post in posts) {
+      results.add(SearchResult(
+        id: post.id,
+        title: post.title,
+        subtitle: 'Post by ${post.author.name}',
+        type: 'post',
+        route: '/post/${post.id}',
+      ));
+    }
+
+    // Add poems (filter from posts)
+    final poems = posts.where((p) => p.type == 'poem');
+    for (final poem in poems) {
+      results.add(SearchResult(
+        id: poem.id,
+        title: poem.title,
+        subtitle: 'Poem by ${poem.author.name}',
+        type: 'poem',
+        route: '/spoken-words',
+      ));
+    }
+
+    // Add blogs (filter from posts)
+    final blogs = posts.where((p) => p.type == 'blog');
+    for (final blog in blogs) {
+      results.add(SearchResult(
+        id: blog.id,
+        title: blog.title,
+        subtitle: 'Blog by ${blog.author.name}',
+        type: 'blog',
+        route: '/chronicles',
+      ));
+    }
+
+    // Add static navigation options
+    results.addAll([
+      SearchResult(
+        id: 'spoken-words',
+        title: 'Spoken Words',
+        subtitle: 'Browse all spoken word content',
+        type: 'section',
+        route: '/spoken-words',
+      ),
+      SearchResult(
+        id: 'chronicles',
+        title: 'Chronicles',
+        subtitle: 'Explore blog posts and articles',
+        type: 'section',
+        route: '/chronicles',
+      ),
+      SearchResult(
+        id: 'whispr-wall',
+        title: 'Whispr Wall',
+        subtitle: 'Community posts and discussions',
+        type: 'section',
+        route: '/whispr-wall',
+      ),
+      SearchResult(
+        id: 'writing-chains',
+        title: 'Writing Chains',
+        subtitle: 'Collaborative writing projects',
+        type: 'section',
+        route: '/writing-chains',
+      ),
+    ]);
+
+    return results;
+  }
+
   @override
   Widget buildResults(BuildContext context) {
-    final results = posts.where((post) {
-      return post.title.toLowerCase().contains(query.toLowerCase()) ||
-             (post.content?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
-             (post.tags?.any((tag) => tag.toLowerCase().contains(query.toLowerCase())) ?? false);
+    final allResults = _getAllSearchResults();
+    final results = allResults.where((result) {
+      return result.title.toLowerCase().contains(query.toLowerCase()) ||
+             result.subtitle.toLowerCase().contains(query.toLowerCase()) ||
+             result.type.toLowerCase().contains(query.toLowerCase());
     }).toList();
+
+    if (results.isEmpty) {
+      return const Center(
+        child: Text('No results found'),
+      );
+    }
 
     return ListView.builder(
       itemCount: results.length,
       itemBuilder: (context, index) {
-        final post = results[index];
+        final result = results[index];
         return ListTile(
-          title: Text(post.title),
-          subtitle: Text(post.author.name),
+          leading: Icon(_getIconForType(result.type)),
+          title: Text(result.title),
+          subtitle: Text(result.subtitle),
           onTap: () {
-            close(context, post);
-            // Navigate to post detail
-            context.go('/post/${post.id}');
+            close(context, result);
+            this.context.go(result.route);
           },
         );
       },
@@ -1060,25 +1575,51 @@ class PostSearchDelegate extends SearchDelegate<Post?> {
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    final suggestions = posts.where((post) {
-      return post.title.toLowerCase().contains(query.toLowerCase()) ||
-             (post.tags?.any((tag) => tag.toLowerCase().contains(query.toLowerCase())) ?? false);
-    }).toList();
+    final allResults = _getAllSearchResults();
+    final suggestions = allResults.where((result) {
+      return result.title.toLowerCase().contains(query.toLowerCase()) ||
+             result.type.toLowerCase().contains(query.toLowerCase());
+    }).take(10).toList(); // Limit suggestions
+
+    if (query.isEmpty) {
+      return const Center(
+        child: Text('Search for posts, poems, blogs, or navigate to sections'),
+      );
+    }
 
     return ListView.builder(
       itemCount: suggestions.length,
       itemBuilder: (context, index) {
-        final post = suggestions[index];
+        final result = suggestions[index];
         return ListTile(
-          title: Text(post.title),
-          subtitle: Text(post.author.name),
+          leading: Icon(_getIconForType(result.type)),
+          title: Text(result.title),
+          subtitle: Text(result.subtitle),
           onTap: () {
-            close(context, post);
-            // Navigate to post detail
-            context.go('/post/${post.id}');
+            close(context, result);
+            this.context.go(result.route);
           },
         );
       },
     );
+  }
+
+  IconData _getIconForType(String type) {
+    switch (type) {
+      case 'post':
+        return Icons.article;
+      case 'poem':
+        return Icons.format_quote;
+      case 'blog':
+        return Icons.book;
+      case 'spoken_word':
+        return Icons.mic;
+      case 'chronicle':
+        return Icons.history;
+      case 'section':
+        return Icons.folder;
+      default:
+        return Icons.search;
+    }
   }
 }

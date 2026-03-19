@@ -110,6 +110,10 @@ class _CreateChroniclesPostScreenState extends ConsumerState<CreateChroniclesPos
         title: const Text('Create New Post'),
         backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/chronicles'),
+        ),
         actions: [
           TextButton(
             onPressed: _isLoading ? null : _createPost,

@@ -74,6 +74,10 @@ class _CreateChainScreenState extends ConsumerState<CreateChainScreen> {
         title: const Text('Create Writing Chain'),
         backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/writing-chains'),
+        ),
       ),
       body: authState.isAuthenticated
           ? _buildCreateForm()

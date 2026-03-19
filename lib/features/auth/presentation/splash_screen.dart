@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/utils/auth_guard.dart';
+import '../auth_state.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -22,7 +23,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     super.initState();
     _setupAnimations();
     _loadThemePreference();
-    _checkAuthAndNavigate();
+    
+    // Delay auth initialization until after the frame is built (Riverpod requirement)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAndNavigate();
+    });
   }
 
   void _setupAnimations() {
@@ -63,17 +68,36 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     }
   }
 
-  Future<void> _checkAuthAndNavigate() async {
-    // Wait a bit for the splash to show
-    await Future.delayed(const Duration(seconds: 2));
+  Future<void> _initializeAndNavigate() async {
+    try {
+      // Initialize auth state from local storage
+      debugPrint('[SplashScreen] Starting auth initialization...');
+      await ref.read(authStateProvider.notifier).initializeAuth();
+      debugPrint('[SplashScreen] Auth initialization completed');
+      
+      // Wait for animations
+      await Future.delayed(const Duration(seconds: 2));
 
-    final isLoggedIn = await AuthGuard.isLoggedIn();
-
-    if (mounted) {
-      if (isLoggedIn) {
-        context.go('/home');
-      } else {
-        context.go('/onboarding');
+      if (mounted) {
+        final authState = ref.read(authStateProvider);
+        
+        debugPrint('[SplashScreen] Auth state after init: isLoggedIn=${authState.isLoggedIn}');
+        
+        // Check if user is authenticated after initialization
+        if (authState.isLoggedIn && authState.user != null) {
+          debugPrint('[SplashScreen] User authenticated, navigating to /home');
+          context.go('/home');
+        } else {
+          debugPrint('[SplashScreen] User not authenticated, navigating to /onboarding');
+          context.go('/onboarding');
+        }
+      }
+    } catch (e) {
+      debugPrint('[SplashScreen] Auth initialization error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Auth error: $e')),
+        );
       }
     }
   }

@@ -74,36 +74,57 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final refreshToken = prefs.getString(AppConstants.refreshTokenKey);
       final userDataJson = prefs.getString(AppConstants.userDataKey);
 
+      debugPrint('Auth initialization: Checking stored credentials...');
+      debugPrint('Access token exists: ${accessToken != null}');
+      debugPrint('User data exists: ${userDataJson != null}');
+
       if (accessToken != null && userDataJson != null) {
-        // Tokens exist, restore session
-        final userMap = jsonDecode(userDataJson) as Map<String, dynamic>;
-        final user = Creator.fromJson(userMap);
-
-        // Set tokens in Supabase client
-        await _setSupabaseTokens(accessToken, refreshToken);
-
-        // Initialize push notifications when restoring session
         try {
-          final pushService = PushNotificationService();
-          await pushService.subscribeToPushNotifications();
-          debugPrint('Push notifications subscribed successfully on session restore');
-        } catch (e) {
-          debugPrint('Failed to initialize push notifications on session restore: $e');
-          // Don't fail session restore if push notifications fail to initialize
-        }
+          // Tokens exist, restore session
+          final userMap = jsonDecode(userDataJson) as Map<String, dynamic>;
+          final user = Creator.fromJson(userMap);
 
-        state = state.copyWith(
-          isLoggedIn: true,
-          user: user,
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-          isLoading: false,
-        );
+          // Set tokens in Supabase client
+          await _setSupabaseTokens(accessToken, refreshToken);
+
+          // Initialize push notifications when restoring session
+          try {
+            final pushService = PushNotificationService();
+            await pushService.subscribeToPushNotifications();
+            debugPrint('Push notifications subscribed successfully on session restore');
+          } catch (e) {
+            debugPrint('Failed to initialize push notifications on session restore: $e');
+            // Don't fail session restore if push notifications fail to initialize
+          }
+
+          state = state.copyWith(
+            isLoggedIn: true,
+            user: user,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            isLoading: false,
+            error: null,
+          );
+          
+          debugPrint('Auth state restored successfully for user: ${user.penName}');
+        } catch (e) {
+          debugPrint('Error restoring session: $e');
+          // If we can't decode the stored data, clear it
+          await prefs.remove(AppConstants.userDataKey);
+          await prefs.remove(AppConstants.accessTokenKey);
+          await prefs.remove(AppConstants.refreshTokenKey);
+          await prefs.setBool(AppConstants.isLoggedInKey, false);
+          
+          state = state.copyWith(isLoading: false, error: null);
+          debugPrint('Corrupted session data cleared');
+        }
       } else {
         // No tokens found
-        state = state.copyWith(isLoading: false);
+        debugPrint('No stored credentials found - starting fresh');
+        state = state.copyWith(isLoading: false, error: null);
       }
     } catch (e) {
+      debugPrint('Auth initialization failed: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to initialize auth: $e',
@@ -133,7 +154,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final accessToken = response['access_token'] as String;
       final refreshToken = response['refresh_token'] as String?;
 
-      // Store tokens and user data
+      // Store tokens and user data persistently
       final prefs = await _getPrefs();
       await prefs.setBool(AppConstants.isLoggedInKey, true);
       await prefs.setString(AppConstants.accessTokenKey, accessToken);
@@ -144,6 +165,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         AppConstants.userDataKey,
         jsonEncode(creator.toJson()),
       );
+
+      debugPrint('User data saved to storage: ${creator.penName}');
 
       // Set tokens in Supabase
       await _setSupabaseTokens(accessToken, refreshToken);
@@ -168,8 +191,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         error: null,
       );
 
+      debugPrint('Login successful for user: ${creator.penName}');
       return true;
     } catch (e) {
+      debugPrint('Login failed: $e');
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
@@ -213,7 +238,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final accessToken = response['access_token'] as String;
       final refreshToken = response['refresh_token'] as String?;
 
-      // Store tokens and user data
+      // Store tokens and user data persistently
       final prefs = await _getPrefs();
       await prefs.setBool(AppConstants.isLoggedInKey, true);
       await prefs.setString(AppConstants.accessTokenKey, accessToken);
@@ -224,6 +249,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         AppConstants.userDataKey,
         jsonEncode(creator.toJson()),
       );
+
+      debugPrint('User data saved to storage: ${creator.penName}');
 
       // Set tokens in Supabase
       await _setSupabaseTokens(accessToken, refreshToken);
@@ -237,8 +264,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         error: null,
       );
 
+      debugPrint('Signup successful for user: ${creator.penName}');
       return creator;
     } catch (e) {
+      debugPrint('Signup failed: $e');
       state = state.copyWith(
         isLoading: false,
         error: e.toString(),
@@ -252,6 +281,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true);
 
     try {
+      debugPrint('Logging out user...');
+      
       // Send logout notification before clearing data - DISABLED for now
       /*
       try {
@@ -267,17 +298,23 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
       final prefs = await _getPrefs();
       
-      // Clear storage
+      // Clear storage completely
       await prefs.remove(AppConstants.isLoggedInKey);
       await prefs.remove(AppConstants.accessTokenKey);
       await prefs.remove(AppConstants.refreshTokenKey);
       await prefs.remove(AppConstants.userDataKey);
 
+      debugPrint('Session data cleared from storage');
+
       // Clear Supabase session
       await Supabase.instance.client.auth.signOut();
 
+      // Reset state completely
       state = AuthState(isLoading: false);
+      
+      debugPrint('Logout successful - auth state reset');
     } catch (e) {
+      debugPrint('Logout error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Logout failed: $e',
