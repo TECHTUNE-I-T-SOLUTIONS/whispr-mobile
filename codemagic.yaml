@@ -3,8 +3,6 @@ workflows:
     name: Default Workflow
     instance_type: mac_mini_m2
     environment:
-      vars:
-        GITHUB_TOKEN: $GITHUB_TOKEN
       groups:
         - whisprmobile
     triggering:
@@ -18,6 +16,7 @@ workflows:
     scripts:
       - name: Get Flutter dependencies
         script: |
+          flutter upgrade
           flutter pub get
       
       - name: Install iOS dependencies
