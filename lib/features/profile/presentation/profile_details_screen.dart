@@ -218,9 +218,28 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
                 [
                   _buildDetailItem('Pen Name', user.penName),
                   _buildDetailItem('Email', user.email),
-                  _buildDetailItem('Account Status', 'Active'),
+                  _buildDetailItem('Display Name', user.displayName),
+                  _buildDetailItem('Status', (user.status ?? 'active').replaceAll('_', ' ').toUpperCase()),
+                  _buildDetailItem('Role', user.role.toUpperCase(), Icons.verified_user),
+                  if (user.location != null && user.location!.isNotEmpty)
+                    _buildDetailItem('Location', user.location!, Icons.location_on),
+                  if (user.website != null && user.website!.isNotEmpty)
+                    _buildDetailItem('Website', user.website!, Icons.language),
+                  _buildDetailItem('Verified', user.verifiedBadge ? '✓ Yes' : 'No', user.verifiedBadge ? Icons.verified : Icons.cancel),
                 ],
                 0,
+              ),
+              const SizedBox(height: AppTheme.spacingL),
+
+              // Content Type & Categories
+              _buildDetailSection(
+                'Content & Interests',
+                [
+                  _buildDetailItem('Content Type', user.contentType.name.toUpperCase()),
+                  if (user.categories.isNotEmpty)
+                    _buildDetailItem('Categories', user.categories.join(', ')),
+                ],
+                1,
               ),
               const SizedBox(height: AppTheme.spacingL),
 
@@ -228,20 +247,86 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
               _buildDetailSection(
                 'Profile Statistics',
                 [
-                  _buildDetailItem('Total Posts', '0', Icons.article_outlined),
-                  _buildDetailItem('Total Followers', '0', Icons.people_outline),
-                  _buildDetailItem('Member Since', '2024', Icons.calendar_today),
+                  _buildDetailItem('Total Posts', user.postCount.toString(), Icons.article_outlined),
+                  _buildDetailItem('Blog Posts', user.totalBlogs.toString(), Icons.description),
+                  _buildDetailItem('Poems', user.totalPoems.toString(), Icons.auto_stories),
+                  _buildDetailItem('Total Followers', user.totalFollowers.toString(), Icons.people_outline),
+                  _buildDetailItem('Total Engagement', user.totalEngagement.toString(), Icons.favorite),
+                  _buildDetailItem('Current Streak', user.currentStreak.toString(), Icons.local_fire_department),
+                  _buildDetailItem('Total Points', user.totalPoints.toString(), Icons.star),
+                  _buildDetailItem('Member Since', _formatDate(user.createdAt ?? ''), Icons.calendar_today),
                 ],
-                1,
+                2,
               ),
               const SizedBox(height: AppTheme.spacingL),
+
+              // Social Links
+              if (user.socialLinks.isNotEmpty) ...[
+                _buildDetailSection(
+                  'Social Links',
+                  user.socialLinks.entries.map((entry) => 
+                    _buildDetailItem(
+                      entry.key.replaceAll('_', ' ').toUpperCase(), 
+                      entry.value,
+                      Icons.link,
+                    )
+                  ).toList(),
+                  3,
+                ),
+                const SizedBox(height: AppTheme.spacingL),
+              ],
+
+              // Badges
+              if (user.badges.isNotEmpty) ...[
+                _buildDetailSection(
+                  'Badges & Achievements',
+                  [
+                    Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      child: Wrap(
+                        spacing: AppTheme.spacingS,
+                        runSpacing: AppTheme.spacingS,
+                        children: user.badges.map((badge) =>
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.spacingM,
+                              vertical: AppTheme.spacingXS,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.primaryColor.withValues(alpha: 0.2),
+                                  AppTheme.primaryColor.withValues(alpha: 0.1),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              badge,
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: AppTheme.primaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        ).toList(),
+                      ),
+                    ),
+                  ],
+                  4,
+                ),
+                const SizedBox(height: AppTheme.spacingL),
+              ],
 
               // Bio Section
               if (user.bio.isNotEmpty) ...[
                 _buildDetailSection(
                   'Bio',
                   [],
-                  2,
+                  5,
                   child: Container(
                     padding: const EdgeInsets.all(AppTheme.spacingM),
                     decoration: BoxDecoration(
@@ -365,6 +450,15 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
         ],
       ),
     );
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateString;
+    }
   }
 
   Widget _buildActionButtons() {

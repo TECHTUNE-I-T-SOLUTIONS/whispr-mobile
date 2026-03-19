@@ -35,6 +35,16 @@ class Creator {
   final String? lastActivityAt;
   final String? createdAt;
   final String? updatedAt;
+  // Additional profile fields
+  final int totalFollowers;
+  final int totalBlogs;
+  final int totalPoems;
+  final int totalEngagement;
+  final String? location;
+  final String? website;
+  final String? status;
+  final List<String> badges;
+  final String role;
 
   Creator({
     required this.id,
@@ -57,6 +67,15 @@ class Creator {
     required this.lastActivityAt,
     required this.createdAt,
     required this.updatedAt,
+    this.totalFollowers = 0,
+    this.totalBlogs = 0,
+    this.totalPoems = 0,
+    this.totalEngagement = 0,
+    this.location,
+    this.website,
+    this.status,
+    this.badges = const [],
+    this.role = 'creator',
   });
 
   factory Creator.fromJson(Map<String, dynamic> json) {
@@ -74,7 +93,7 @@ class Creator {
       ),
       categories: json['categories'] != null
           ? List<String>.from(json['categories'])
-          : [],
+          : (json['preferred_categories'] != null ? List<String>.from(json['preferred_categories']) : []),
       socialLinks: json['social_links'] != null
           ? Map<String, String>.from(json['social_links'])
           : {},
@@ -83,14 +102,23 @@ class Creator {
         orElse: () => ProfileVisibility.public,
       ),
       pushNotificationsEnabled: json['push_notifications_enabled'] ?? true,
-      postCount: json['post_count'] ?? 0,
-      engagementCount: json['engagement_count'] ?? 0,
-      currentStreak: json['current_streak'] ?? 0,
+      postCount: json['post_count'] ?? json['total_posts'] ?? 0,
+      engagementCount: json['engagement_count'] ?? json['total_engagement'] ?? 0,
+      currentStreak: json['current_streak'] ?? json['streak_count'] ?? 0,
       totalPoints: json['total_points'] ?? 0,
-      verifiedBadge: json['verified_badge'] ?? false,
+      verifiedBadge: json['verified_badge'] ?? json['is_verified'] ?? false,
       lastActivityAt: json['last_activity_at'] ?? json['updated_at'] ?? DateTime.now().toIso8601String(),
       createdAt: json['created_at'] ?? DateTime.now().toIso8601String(),
       updatedAt: json['updated_at'] ?? DateTime.now().toIso8601String(),
+      totalFollowers: json['total_followers'] ?? 0,
+      totalBlogs: json['total_blog_posts'] ?? 0,
+      totalPoems: json['total_poems'] ?? 0,
+      totalEngagement: json['total_engagement'] ?? 0,
+      location: json['location'],
+      website: json['website'] ?? json['social_links']?['website'],
+      status: json['status'] ?? 'active',
+      badges: json['badges'] != null ? List<String>.from(json['badges']) : [],
+      role: json['role'] ?? 'creator',
     );
   }
 
