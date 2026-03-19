@@ -21,8 +21,8 @@ workflows:
       
       - name: Build Android Release
         script: |
-          flutter build apk --release --profile-usage-good-practices
-          flutter build appbundle --release --profile-usage-good-practices
+          flutter build apk --release
+          flutter build appbundle --release
       
       - name: Publish to GitHub
         script: |
