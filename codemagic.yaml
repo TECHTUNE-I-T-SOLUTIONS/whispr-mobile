@@ -1,0 +1,58 @@
+workflows:
+  default-workflow:
+    name: Default Workflow
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        GITHUB_TOKEN: $GITHUB_TOKEN
+      groups:
+        - whisprmobile
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Get Flutter dependencies
+        script: |
+          flutter pub get
+      
+      - name: Install iOS dependencies
+        script: |
+          cd ios
+          pod install --repo-update
+          cd ..
+      
+      - name: Build for iOS
+        script: |
+          flutter build ios --release
+      
+      - name: Build for Android
+        script: |
+          flutter build apk --release
+          flutter build appbundle --release
+      
+      - name: Publish to GitHub
+        script: |
+          #!/bin/bash
+          
+          # Make script executable
+          chmod +x ./scripts/create-github-release.sh
+          
+          # Run the GitHub release script
+          ./scripts/create-github-release.sh
+    artifacts:
+      - build/ios/iphoneos/*.app
+      - build/android/app/outputs/apk/release/*.apk
+      - build/android/app/outputs/bundle/release/*.aab
+      - build/ios/iphoneos/Runner.app/Info.plist
+    publishing:
+      email:
+        recipients:
+          - techtune.it.solutions@gmail.com
+        notify:
+          success: true
+          failure: true

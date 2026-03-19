@@ -38,15 +38,21 @@ jobs:
           RESPONSE=$(curl -s -H "x-auth-token: ${CODEMAGIC_API_TOKEN}" \
             "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=10")
           
-          # Extract iOS build (first successful one)
-          IOS_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "ios" and .buildStatus == "success") | select(.artifacts | length > 0) | first' 2>/dev/null)
+          echo "$RESPONSE" > /tmp/builds.json
           
-          # Extract Android build (first successful one)
-          ANDROID_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "android" and .buildStatus == "success") | select(.artifacts | length > 0) | first' 2>/dev/null)
+          # Extract download URLs from builds (CodeMagic uses "artefacts" not "artifacts")
+          # Look for APK and AAB files from Android builds, IPA files from iOS builds
+          IOS_URL=$(jq -r '.builds[] | select(.workflow.buildSettings.platforms[]? == "ios") | .artefacts[]? | select(.name | endswith(".ipa")) | .url | select(. != null) | first' /tmp/builds.json)
+          ANDROID_URL=$(jq -r '.builds[] | select(.workflow.buildSettings.platforms[]? == "android") | .artefacts[]? | select(.name | endswith(".apk") or endswith(".aab")) | .url | select(. != null) | first' /tmp/builds.json)
           
-          # Extract download URLs
-          IOS_URL=$(echo "$IOS_BUILD" | jq -r '.artifacts[0].downloadUrl // empty' 2>/dev/null)
-          ANDROID_URL=$(echo "$ANDROID_BUILD" | jq -r '.artifacts[0].downloadUrl // empty' 2>/dev/null)
+          # Fallback: if no specific artifact found, get any artifact from successful builds
+          if [ -z "$IOS_URL" ]; then
+            IOS_URL=$(jq -r '.builds[] | select(.status == "finished" and (.artefacts | length > 0)) | .artefacts[]? | .url | select(. != null) | first' /tmp/builds.json | head -1)
+          fi
+          
+          if [ -z "$ANDROID_URL" ]; then
+            ANDROID_URL=$(jq -r '.builds[] | select(.status == "finished" and (.artefacts | length > 0)) | .artefacts[]? | .url | select(. != null) | first' /tmp/builds.json | tail -1)
+          fi
           
           # Extract version from pubspec.yaml or use provided input
           VERSION="${{ github.event.inputs.version }}"
