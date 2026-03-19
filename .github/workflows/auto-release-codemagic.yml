@@ -1,0 +1,105 @@
+name: Auto-Release on CodeMagic Build Success
+
+on:
+  schedule:
+    # Check every hour for new successful builds
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        
+      - name: Check for new CodeMagic builds
+        id: buildcheck
+        env:
+          CODEMAGIC_API_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
+          CODEMAGIC_APP_ID: ${{ secrets.CODEMAGIC_APP_ID }}
+        run: |
+          # Fetch latest successful builds from CodeMagic
+          curl -s -H "x-auth-token: ${CODEMAGIC_API_TOKEN}" \
+            "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=1" > builds.json
+          
+          # Check if we have a successful build
+          BUILD_ID=$(jq -r '.builds[0].id // empty' builds.json)
+          BUILD_STATUS=$(jq -r '.builds[0].buildStatus // empty' builds.json)
+          BUILD_TIME=$(jq -r '.builds[0].finishingTime // empty' builds.json)
+          
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_STATUS" != "success" ]; then
+            echo "No successful build found"
+            echo "has_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "has_build=true" >> $GITHUB_OUTPUT
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
+          
+          # Check if release already exists
+          VERSION=$(cat pubspec.yaml | grep "version:" | head -1 | awk '{print $2}' | cut -d '+' -f1)
+          
+          # Get or create release tag
+          RELEASE_TAG="v$VERSION"
+          if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists"
+            echo "should_create=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_create=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        if: steps.buildcheck.outputs.should_create == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.buildcheck.outputs.version }}
+          name: Whispr Mobile v${{ steps.buildcheck.outputs.version }}
+          body: |
+            🎉 **Whispr Mobile v${{ steps.buildcheck.outputs.version }}** is now available!
+            
+            ## What's Included
+            - 📱 iOS build
+            - 🤖 Android build
+            - 🔐 Latest security updates
+            - ✨ Bug fixes and improvements
+            
+            ## Download
+            
+            Visit the [Whispr Download Page](/download) to get the latest version.
+            
+            ### Installation
+            
+            **iOS**: Available on TestFlight or App Store
+            **Android**: Available on Google Play Store or via APK download
+            
+            ## Build Information
+            
+            - **Built by**: CodeMagic CI/CD
+            - **Build ID**: ${{ steps.buildcheck.outputs.build_id }}
+            - **Release Date**: ${{ steps.buildcheck.outputs.build_time }}
+            - **Platform**: iOS & Android
+            
+            ## Release Notes
+            
+            Made with ❤️ by the Whispr team
+            
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Notify download page
+        if: steps.buildcheck.outputs.has_build == 'true'
+        run: |
+          echo "✅ Release created for v${{ steps.buildcheck.outputs.version }}"
+          echo "The Whispr download page will automatically display this release."
+          echo ""
+          echo "📊 Build Details:"
+          echo "  - Build ID: ${{ steps.buildcheck.outputs.build_id }}"
+          echo "  - Status: Success"
+          echo "  - Release: v${{ steps.buildcheck.outputs.version }}"

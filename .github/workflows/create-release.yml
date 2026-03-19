@@ -1,0 +1,98 @@
+name: Create GitHub Release from CodeMagic Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'App version (e.g., 1.0.0)'
+        required: true
+        type: string
+      changelog:
+        description: 'Release changelog/notes'
+        required: false
+        type: string
+  repository_dispatch:
+    types: [codemagic-build-success]
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest CodeMagic builds
+        id: codemagic
+        env:
+          CODEMAGIC_API_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
+          CODEMAGIC_APP_ID: ${{ secrets.CODEMAGIC_APP_ID }}
+        run: |
+          # Fetch latest successful builds
+          RESPONSE=$(curl -s -H "x-auth-token: ${CODEMAGIC_API_TOKEN}" \
+            "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=10")
+          
+          # Extract iOS and Android build info
+          IOS_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "ios" and .buildStatus == "success") | .[0]' 2>/dev/null)
+          ANDROID_BUILD=$(echo "$RESPONSE" | jq -r '.builds[] | select(.platform == "android" and .buildStatus == "success") | .[0]' 2>/dev/null)
+          
+          # Extract version from pubspec.yaml or use provided input
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep "version:" pubspec.yaml | head -1 | awk '{print $2}' | cut -d '+' -f1)
+          fi
+          
+          # Extract changelog
+          CHANGELOG="${{ github.event.inputs.changelog }}"
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="Release v${VERSION}\n\n📱 iOS and Android builds available\n\nBuilt with CodeMagic CI/CD"
+          fi
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "ios_build<<EOF" >> $GITHUB_OUTPUT
+          echo "$IOS_BUILD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "android_build<<EOF" >> $GITHUB_OUTPUT
+          echo "$ANDROID_BUILD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.codemagic.outputs.version }}
+          name: Whispr v${{ steps.codemagic.outputs.version }}
+          body: |
+            ${{ steps.codemagic.outputs.changelog }}
+            
+            ## Installation
+            
+            Visit [Whispr Download Page](/download) to download the latest builds.
+            
+            ### iOS
+            Available on App Store (coming soon) or TestFlight
+            
+            ### Android
+            Available on Google Play Store (coming soon) or via APK
+            
+            ## Release Details
+            
+            - **Version**: v${{ steps.codemagic.outputs.version }}
+            - **Date**: ${{ github.event.repository.updated_at }}
+            - **Build**: CodeMagic CI/CD
+            
+            Thank you for using Whispr! 💜
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Update website download page
+        run: |
+          echo "Release v${{ steps.codemagic.outputs.version }} created successfully!"
+          echo "The download page will automatically fetch and display this release."
