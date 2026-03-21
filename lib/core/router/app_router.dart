@@ -12,6 +12,8 @@ import '../../features/whispr_wall/presentation/whispr_wall_screen.dart';
 import '../../features/writing_chains/presentation/writing_chains_screen.dart';
 import '../../features/writing_chains/presentation/create_chain_screen.dart';
 import '../../features/writing_chains/presentation/chain_entries_screen.dart';
+import '../../features/writing_chains/presentation/create_chain_entry_screen.dart';
+import '../../features/writing_chains/presentation/edit_chain_entry_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/profile/presentation/profile_details_screen.dart';
@@ -87,6 +89,32 @@ final router = GoRouter(
             final chainId = state.pathParameters['chainId']!;
             return ChainEntriesScreen(chainId: chainId);
           },
+          routes: [
+            GoRoute(
+              path: 'create-entry',
+              builder: (context, state) {
+                final chainId = state.pathParameters['chainId']!;
+                final chainTitle = state.extra as String?;
+                return CreateChainEntryScreen(
+                  chainId: chainId,
+                  chainTitle: chainTitle,
+                );
+              },
+            ),
+            GoRoute(
+              path: 'edit-entry/:entryId',
+              builder: (context, state) {
+                final chainId = state.pathParameters['chainId']!;
+                final entryId = state.pathParameters['entryId']!;
+                final extra = state.extra as Map<String, dynamic>?;
+                return EditChainEntryScreen(
+                  chainId: chainId,
+                  entryId: entryId,
+                  chainTitle: extra?['chainTitle'] as String?,
+                );
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: '/notifications',

@@ -1,7 +1,7 @@
 class AppConstants {
   // API Configuration
-  static const String baseUrl = 'https://whisprwords.vercel.app/api';
-  static const String localBaseUrl = 'https://whisprwords.vercel.app/api';
+  static const String baseUrl = 'http://10.0.2.2:3000/api';
+  static const String localBaseUrl = 'http://localhost:3000/api';
 
   // API Endpoints
   static const String postsEndpoint = '/posts';

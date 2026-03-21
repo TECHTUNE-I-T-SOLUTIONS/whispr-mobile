@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/models/chronicles.dart';
 import '../../../core/network/api_service.dart';
@@ -99,7 +100,13 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
               title: post['title'],
               slug: post['slug'],
               excerpt: post['excerpt'],
+              content: post['content'],
+              coverImageUrl: post['cover_image_url'],
+              category: post['category'],
+              tags: (post['tags'] as List?)?.cast<String>() ?? [],
               publishedAt: post['published_at'],
+              creatorName: post['creator']?['pen_name'],
+              creatorId: post['creator']?['id'],
               likesCount: post['likes_count'] ?? 0,
               commentsCount: post['comments_count'] ?? 0,
               sharesCount: post['shares_count'] ?? 0,
@@ -141,83 +148,14 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
   }
 
   Future<void> _createEntry() async {
-    final titleController = TextEditingController();
-    final contentController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Your Entry'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                hintText: 'Give your poem a title',
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingM),
-            TextField(
-              controller: contentController,
-              decoration: const InputDecoration(
-                labelText: 'Content',
-                hintText: 'Write your poem here...',
-              ),
-              maxLines: 8,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (titleController.text.trim().isNotEmpty && contentController.text.trim().isNotEmpty) {
-                Navigator.of(context).pop(true);
-              }
-            },
-            child: const Text('Add Entry'),
-          ),
-        ],
-      ),
+    // Navigate to the create entry screen and wait for it to pop
+    await context.push(
+      '/writing-chains/${widget.chainId}/create-entry',
+      extra: _chain?.title,
     );
-
-    if (result == true) {
-      try {
-        setState(() => _isLoading = true);
-        final apiService = ref.read(apiServiceProvider);
-        final response = await apiService.post('/chronicles/chains/${widget.chainId}', data: {
-          'title': titleController.text.trim(),
-          'content': contentController.text.trim(),
-          'post_type': 'poem',
-          'status': 'published',
-        });
-
-        if (response['success'] == true) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Entry added successfully!')),
-            );
-            _fetchChainDetails(); // Refresh the list
-          }
-        } else {
-          throw Exception(response['error'] ?? 'Failed to add entry');
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to add entry: $e')),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
-      }
+    // Refresh the list when returning from create entry screen
+    if (mounted) {
+      _fetchChainDetails();
     }
   }
 
@@ -343,100 +281,220 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
               ),
             ),
           ] else ...[
-            ..._entries.map((entry) => Card(
-              margin: const EdgeInsets.only(bottom: AppTheme.spacingM),
-              child: InkWell(
-                onTap: entry.post != null ? () {
-                  // Navigate to post detail using post ID
-                  context.go('/post/${entry.post!.id}');
-                } : null,
-                borderRadius: BorderRadius.circular(AppTheme.borderRadiusM),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppTheme.spacingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppTheme.spacingS,
-                              vertical: AppTheme.spacingXS,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(AppTheme.borderRadiusS),
-                            ),
-                            child: Text(
-                              '#${entry.sequence}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppTheme.spacingS),
-                          Expanded(
-                            child: Text(
-                              entry.post?.title ?? 'Untitled',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (entry.post?.excerpt != null && entry.post!.excerpt!.isNotEmpty) ...[
-                        const SizedBox(height: AppTheme.spacingS),
-                        Text(
-                          entry.post!.excerpt!,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: AppTheme.spacingS),
-                      Text(
-                        'Added ${entry.addedAtFormatted}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
-                      ),
-                      const SizedBox(height: AppTheme.spacingM),
-                      Divider(
-                        height: 1,
-                        color: Theme.of(context).colorScheme.outlineVariant,
-                      ),
-                      const SizedBox(height: AppTheme.spacingS),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildEngagementButton(
-                            icon: Icons.favorite_outline,
-                            label: '${entry.post?.likesCount ?? 0}',
-                            onPressed: () => _handleLike(entry),
-                          ),
-                          _buildEngagementButton(
-                            icon: Icons.comment_outlined,
-                            label: '${entry.post?.commentsCount ?? 0}',
-                            onPressed: () => _handleComment(entry),
-                          ),
-                          _buildEngagementButton(
-                            icon: Icons.share_outlined,
-                            label: '${entry.post?.sharesCount ?? 0}',
-                            onPressed: () => _handleShare(entry),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )),
+            ..._entries.map((entry) => _buildEntryCard(entry)),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildEntryCard(ChainEntry entry) {
+    if (entry.post == null) {
+      return const SizedBox.shrink();
+    }
+
+    final post = entry.post!;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppTheme.spacingM),
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.spacingM),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Entry sequence and menu
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spacingS,
+                    vertical: AppTheme.spacingXS,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusS),
+                  ),
+                  child: Text(
+                    '#${entry.sequence}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppTheme.spacingS),
+                Expanded(
+                  child: Text(
+                    post.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _editEntry(entry);
+                    } else if (value == 'delete') {
+                      _deleteEntry(entry);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit, size: 18),
+                          SizedBox(width: 8),
+                          Text('Edit'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, size: 18),
+                          SizedBox(width: 8),
+                          Text('Delete'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: AppTheme.spacingM),
+
+            // Cover image if available
+            if (post.coverImageUrl != null && post.coverImageUrl!.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppTheme.borderRadiusM),
+                child: Image.network(
+                  post.coverImageUrl!,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      child: const Center(child: Icon(Icons.image_not_supported)),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 200,
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      child: const Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingM),
+            ],
+
+            // Creator info if available
+            if (post.creatorName != null || post.publishedAt != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (post.creatorName != null) ...[
+                    Text(
+                      'By ${post.creatorName}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                  Text(
+                    'Added ${entry.addedAtFormatted}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppTheme.spacingM),
+            ],
+
+            // Category and tags if available
+            if (post.category != null || (post.tags != null && post.tags!.isNotEmpty)) ...[
+              Wrap(
+                spacing: AppTheme.spacingXS,
+                runSpacing: AppTheme.spacingXS,
+                children: [
+                  if (post.category != null) ...[
+                    Chip(
+                      label: Text(post.category!),
+                      labelStyle: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                  if (post.tags != null && post.tags!.isNotEmpty) ...[
+                    ...post.tags!.map((tag) => Chip(
+                      label: Text('#$tag'),
+                      labelStyle: Theme.of(context).textTheme.labelSmall,
+                    )),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppTheme.spacingM),
+            ],
+
+            // Excerpt
+            if (post.excerpt != null && post.excerpt!.isNotEmpty) ...[
+              Text(
+                post.excerpt!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingM),
+            ],
+
+            // Full content with expandable "See more"
+            _ExpandableContent(
+              content: post.content ?? '',
+              maxLines: 10,
+              textStyle: Theme.of(context).textTheme.bodyMedium,
+            ),
+
+            const SizedBox(height: AppTheme.spacingM),
+
+            // Divider
+            Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+
+            const SizedBox(height: AppTheme.spacingS),
+
+            // Engagement buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildEngagementButton(
+                  icon: Icons.favorite_outline,
+                  label: '${post.likesCount}',
+                  onPressed: () => _handleLike(entry),
+                ),
+                _buildEngagementButton(
+                  icon: Icons.comment_outlined,
+                  label: '${post.commentsCount}',
+                  onPressed: () => _handleComment(entry),
+                ),
+                _buildEngagementButton(
+                  icon: Icons.share_outlined,
+                  label: '${post.sharesCount}',
+                  onPressed: () => _handleShare(entry),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -488,20 +546,22 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
   }
 
   Future<void> _handleLike(ChainEntry entry) async {
+    if (entry.post == null) return;
+
     try {
       final apiService = ref.read(apiServiceProvider);
       final response = await apiService.post(
-        '/chronicles/chains/${widget.chainId}/entries/${entry.id}/engage',
-        data: { 'action': 'like' },
+        '/chronicles/chains/entries/reactions',
+        data: { 'entry_post_id': entry.post!.id },
       );
 
-      if (response['success'] == true) {
+      if (response['success'] == true || response['action'] != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Liked!')),
           );
+          _fetchChainDetails();
         }
-        // Update local state if needed
       } else {
         throw Exception(response['error'] ?? 'Failed to like');
       }
@@ -515,6 +575,8 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
   }
 
   Future<void> _handleComment(ChainEntry entry) async {
+    if (entry.post == null) return;
+
     final commentController = TextEditingController();
 
     final result = await showDialog<String>(
@@ -550,11 +612,14 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
       try {
         final apiService = ref.read(apiServiceProvider);
         final response = await apiService.post(
-          '/chronicles/chains/${widget.chainId}/entries/${entry.id}/comments',
-          data: { 'content': result },
+          '/chronicles/chains/entries/comments',
+          data: { 
+            'entry_post_id': entry.post!.id,
+            'content': result,
+          },
         );
 
-        if (response['success'] == true) {
+        if (response['success'] == true || response['comment'] != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Comment posted!')),
@@ -575,23 +640,113 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
   }
 
   Future<void> _handleShare(ChainEntry entry) async {
+    if (entry.post == null) return;
+
     try {
-      final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.post(
-        '/chronicles/chains/${widget.chainId}/entries/${entry.id}/engage',
-        data: { 'action': 'share' },
+      // Create a deep link that opens the entry in the app
+      final deepLink = 'whisprmobile://writing-chains/${widget.chainId}/entry/${entry.post!.id}';
+      final webLink = 'https://whispr.app/writing-chains/${widget.chainId}/entry/${entry.post!.id}';
+      
+      final shareText = '''
+Check out this entry: "${entry.post!.title}"
+
+Opening in Whispr app: $deepLink
+Or visit: $webLink
+''';
+
+      // Use the Share plugin to share
+      await Share.share(
+        shareText,
+        subject: 'Check out this entry from Whispr: ${entry.post!.title}',
       );
 
-      if (response['success'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Shared!')),
-          );
-        }
-      } else {
-        throw Exception(response['error'] ?? 'Failed to share');
+      // Also log the share to the backend
+      try {
+        final apiService = ref.read(apiServiceProvider);
+        await apiService.post(
+          '/chronicles/chains/entries/shares',
+          data: { 'entry_post_id': entry.post!.id },
+        );
+      } catch (e) {
+        debugPrint('Error logging share: $e');
+        // Don't fail even if logging fails
       }
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editEntry(ChainEntry entry) async {
+    if (entry.post == null) return;
+
+    // Navigate to edit entry screen
+    await context.push(
+      '/writing-chains/${widget.chainId}/edit-entry/${entry.post!.id}',
+      extra: {
+        'title': entry.post!.title,
+        'chainTitle': _chain?.title,
+      },
+    );
+
+    // Refresh the list when returning from edit entry screen
+    if (mounted) {
+      _fetchChainDetails();
+    }
+  }
+
+  Future<void> _deleteEntry(ChainEntry entry) async {
+    if (entry.post == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Entry'),
+        content: const Text('Are you sure you want to delete this entry? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      debugPrint('Deleting entry: ${entry.post!.id}');
+      
+      final response = await apiService.delete(
+        '/chronicles/chains/entries/${entry.post!.id}',
+      );
+
+      debugPrint('Delete response: $response');
+
+      if (response['success'] == true || response is Map && response['message'] != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Entry deleted!')),
+          );
+          _fetchChainDetails();
+        }
+      } else {
+        final errorMsg = response['error'] ?? response.toString() ?? 'Failed to delete entry';
+        throw Exception(errorMsg);
+      }
+    } catch (e) {
+      debugPrint('Delete error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
@@ -635,12 +790,78 @@ class ChainEntry {
   }
 }
 
+/// Expandable content widget with "See more" / "See less" functionality
+class _ExpandableContent extends StatefulWidget {
+  final String content;
+  final int maxLines;
+  final TextStyle? textStyle;
+
+  const _ExpandableContent({
+    required this.content,
+    this.maxLines = 5,
+    this.textStyle,
+  });
+
+  @override
+  State<_ExpandableContent> createState() => _ExpandableContentState();
+}
+
+class _ExpandableContentState extends State<_ExpandableContent> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.content,
+          style: widget.textStyle ?? Theme.of(context).textTheme.bodyMedium,
+          maxLines: _isExpanded ? null : widget.maxLines,
+          overflow: _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+        ),
+        // Check if content actually overflows
+        if (_shouldShowExpandButton()) ...[
+          const SizedBox(height: AppTheme.spacingS),
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            child: Text(
+              _isExpanded ? 'See less' : 'See more',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool _shouldShowExpandButton() {
+    // Simple heuristic: if content has many lines or characters
+    final lineCount = widget.content.split('\n').length;
+    final characterCount = widget.content.length;
+    return lineCount > widget.maxLines || characterCount > 500;
+  }
+}
+
 class PostSummary {
   final String id;
   final String title;
   final String slug;
   final String? excerpt;
+  final String? content;
+  final String? coverImageUrl;
+  final String? category;
+  final List<String>? tags;
   final String? publishedAt;
+  final String? creatorName;
+  final String? creatorId;
   final int likesCount;
   final int commentsCount;
   final int sharesCount;
@@ -650,7 +871,13 @@ class PostSummary {
     required this.title,
     required this.slug,
     this.excerpt,
+    this.content,
+    this.coverImageUrl,
+    this.category,
+    this.tags,
     this.publishedAt,
+    this.creatorName,
+    this.creatorId,
     this.likesCount = 0,
     this.commentsCount = 0,
     this.sharesCount = 0,
