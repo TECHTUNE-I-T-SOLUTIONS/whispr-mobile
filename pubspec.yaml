@@ -29,6 +29,7 @@ dependencies:
   # Payments
 
   # Utils
+  flutter_dotenv: ^5.0.2
   intl: ^0.17.0
   url_launcher: ^6.2.2
   cached_network_image: ^3.3.0

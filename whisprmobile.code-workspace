@@ -7,5 +7,7 @@
 			"path": "../../whispr"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"java.configuration.updateBuildConfiguration": "interactive"
+	}
 }

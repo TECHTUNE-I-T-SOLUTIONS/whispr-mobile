@@ -9,6 +9,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/models/chronicles.dart';
 import '../../core/network/api_service.dart';
 import '../../core/services/push_notification_service.dart';
+import '../../core/services/session_manager.dart';
 
 // Auth state notifier
 class AuthState {
@@ -171,6 +172,9 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       // Set tokens in Supabase
       await _setSupabaseTokens(accessToken, refreshToken);
 
+      // Reset session timer for new login
+      await SessionManager().resetSession();
+
       // Initialize push notifications after successful login
       try {
         final pushService = PushNotificationService();
@@ -305,6 +309,9 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       await prefs.remove(AppConstants.userDataKey);
 
       debugPrint('Session data cleared from storage');
+
+      // Clear session manager data
+      await SessionManager().clearSessionData();
 
       // Clear Supabase session
       await Supabase.instance.client.auth.signOut();

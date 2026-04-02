@@ -626,6 +626,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
           ),
           _buildDivider(),
           _buildFeatureItem(
+            icon: Icons.smart_toy_outlined,
+            title: 'AI Writing Lab',
+            subtitle: 'Generate chronicles, poems, and writing chains',
+            onTap: () => context.go('/ai-chat'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
             icon: Icons.notifications_outlined,
             title: 'Notifications',
             subtitle: 'View all notifications',

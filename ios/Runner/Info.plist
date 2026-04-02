@@ -68,5 +68,17 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<!-- whispr:// scheme for deep linking -->
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>com.example.whisprmobile</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>whispr</string>
+				</array>
+			</dict>
+		</array>
 	</dict>
 </plist>

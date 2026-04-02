@@ -498,7 +498,7 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> with Ticker
                             ),
                             child: InkWell(
                               onTap: () {
-                                context.go('/post/${post.id}');
+                                context.go('/chronicles/${post.id}');
                               },
                               borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
                               child: Column(
@@ -660,7 +660,7 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> with Ticker
                                                   color: AppTheme.primaryColor,
                                                 ),
                                                 onPressed: () {
-                                                  context.go('/post/${post.id}');
+                                                  context.go('/chronicles/${post.id}');
                                                 },
                                               ),
                                             ),

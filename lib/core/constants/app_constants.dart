@@ -1,7 +1,37 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConstants {
   // API Configuration
-  static const String baseUrl = 'https://whisprwords.vercel.app/api';
-  static const String localBaseUrl = 'https://whisprwords.vercel.app/api';
+  static String get baseUrl {
+    if (!dotenv.isInitialized) {
+      return 'https://whisprwords.vercel.app/api';
+    }
+    return dotenv.env['API_BASE_URL'] ?? 'https://whisprwords.vercel.app/api';
+  }
+
+  static String get localBaseUrl {
+    if (!dotenv.isInitialized) {
+      return 'https://whisprwords.vercel.app/api';
+    }
+    return dotenv.env['API_BASE_URL'] ?? 'https://whisprwords.vercel.app/api';
+  }
+
+  // Share URL Configuration (for generating shareable links)
+  static String get shareBaseUrl {
+    if (!dotenv.isInitialized) {
+      return 'https://whisprwords.vercel.app';
+    }
+    return dotenv.env['SHARE_BASE_URL'] ?? 'https://whisprwords.vercel.app';
+  }
+
+  // Gemini API key stored in .env
+  static String get geminiApiKey {
+    if (!dotenv.isInitialized) {
+      return '';
+    }
+    return dotenv.env['GEMINI_API_KEY'] ?? '';
+  }
+
 
   // API Endpoints
   static const String postsEndpoint = '/posts';

@@ -8,6 +8,8 @@ import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/chronicles/presentation/chronicles_screen.dart';
 import '../../features/chronicles/presentation/create_chronicles_post_screen.dart';
+import '../../features/chronicles/presentation/chronicles_post_detail_screen.dart';
+import '../../features/ai_chat/presentation/ai_chat_screen.dart';
 import '../../features/whispr_wall/presentation/whispr_wall_screen.dart';
 import '../../features/writing_chains/presentation/writing_chains_screen.dart';
 import '../../features/writing_chains/presentation/create_chain_screen.dart';
@@ -136,7 +138,21 @@ final router = GoRouter(
             return PostDetailScreen(postId: id);
           },
         ),
+        // Chronicles post details - supports both deep link formats
+        GoRoute(
+          path: '/chronicles/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return ChroniclesPostDetailScreen(postId: id);
+          },
+        ),
       ],
+    ),
+
+    // AI Chat (new)
+    GoRoute(
+      path: '/ai-chat',
+      builder: (context, state) => const AiChatScreen(),
     ),
 
     // Premium
@@ -166,7 +182,10 @@ final router = GoRouter(
     final isPublicRoute = state.matchedLocation == '/home' ||
                          state.matchedLocation == '/chronicles' ||
                          state.matchedLocation == '/whispr-wall' ||
-                         state.matchedLocation == '/notifications';
+                         state.matchedLocation == '/notifications' ||
+                         state.matchedLocation.startsWith('/post/') ||
+                         state.matchedLocation.startsWith('/chronicles/') ||
+                         state.matchedLocation.startsWith('/creator/');
 
     if (!isLoggedIn && !isAuthRoute && !isPublicRoute) {
       return '/login';

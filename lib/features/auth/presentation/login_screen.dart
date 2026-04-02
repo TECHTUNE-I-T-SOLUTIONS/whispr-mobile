@@ -33,20 +33,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authStateProvider.notifier).login(
+      // Perform login and check result
+      final success = await ref.read(authStateProvider.notifier).login(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
-      if (mounted) {
+      if (!mounted) return;
+
+      if (success) {
+        // Login successful - navigate to home
         context.go('/home');
+      } else {
+        // Login failed - show error from auth state
+        final authState = ref.read(authStateProvider);
+        final errorMessage = authState.error ?? 'Login failed. Please try again.';
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage.replaceFirst('Exception: ', '')),
+            backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        
+        // Clear password field on error for security
+        _passwordController.clear();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            content: Text(
+              'Error: ${e.toString().replaceFirst('Exception: ', '')}',
+              maxLines: 3,
+            ),
             backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

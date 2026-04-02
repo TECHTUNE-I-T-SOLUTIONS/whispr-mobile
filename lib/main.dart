@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
@@ -9,6 +10,11 @@ import 'features/theme/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables from .env and .env.local (build secret keys).
+  // If neither file is present, continue with defaults for dev/test.
+  await dotenv.load(fileName: '.env', isOptional: true);
+  await dotenv.load(fileName: '.env.local', isOptional: true);
 
   // Initialize Supabase
   await Supabase.initialize(
