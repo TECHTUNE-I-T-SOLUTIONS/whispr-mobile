@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../constants/app_constants.dart';
+import 'auth_session_store.dart';
 import 'push_notification_service.dart';
 
 /// SessionManager handles session lifecycle and expiration
@@ -14,30 +13,20 @@ class SessionManager {
   
   // Maximum session duration: 30 days from login (for long-lasting sessions)
   static const Duration _maxSessionDuration = Duration(days: 30);
-  
-  // Storage keys for session metadata
-  static const String _sessionStartTimeKey = 'session_start_time';
 
   /// Initialize session tracking (called on app startup)
   Future<void> initializeSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Try to restore session start time from storage
-    final storedStartTime = prefs.getString(_sessionStartTimeKey);
-    
-    if (storedStartTime != null) {
-      try {
-        _sessionStartTime = DateTime.parse(storedStartTime);
-      } catch (e) {
-        debugPrint('Error parsing stored session start time: $e');
-      }
+    final stored = await AuthSessionStore.restore();
+    _sessionStartTime = stored?.sessionStart ?? DateTime.now();
+
+    if (stored != null) {
+      await AuthSessionStore.save(
+        accessToken: stored.accessToken,
+        refreshToken: stored.refreshToken,
+        user: stored.user,
+        sessionStart: _sessionStartTime,
+      );
     }
-    
-    // If no session start time, use now
-    _sessionStartTime ??= DateTime.now();
-    
-    // Persist session start time
-    await prefs.setString(_sessionStartTimeKey, _sessionStartTime!.toIso8601String());
     
     debugPrint('Session tracking initialized - Start: $_sessionStartTime');
   }
@@ -50,8 +39,8 @@ class SessionManager {
   /// Check if the current session is still valid based on max duration
   /// Returns true if session should remain active
   Future<bool> isSessionValid() async {
-    final accessToken = (await SharedPreferences.getInstance())
-        .getString(AppConstants.accessTokenKey);
+    final stored = await AuthSessionStore.restore();
+    final accessToken = stored?.accessToken;
     
     if (accessToken == null) {
       debugPrint('No access token found - session invalid');
@@ -76,8 +65,8 @@ class SessionManager {
   /// Check if session has expired and handle accordingly
   Future<void> checkAndHandleSessionExpiration() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final accessToken = prefs.getString(AppConstants.accessTokenKey);
+      final stored = await AuthSessionStore.restore();
+      final accessToken = stored?.accessToken;
 
       if (accessToken == null) {
         // No session to validate
@@ -102,7 +91,7 @@ class SessionManager {
         }
 
         // Clear the session data
-        await _clearSessionData(prefs);
+        await _clearSessionData();
       }
     } catch (e) {
       debugPrint('Error checking session: $e');
@@ -112,13 +101,7 @@ class SessionManager {
   /// Clear all session data from local storage
   Future<void> clearSessionData() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(AppConstants.accessTokenKey);
-      await prefs.remove(AppConstants.refreshTokenKey);
-      await prefs.remove(AppConstants.userDataKey);
-      await prefs.remove(_sessionStartTimeKey);
-      await prefs.setBool(AppConstants.isLoggedInKey, false);
-      
+      await AuthSessionStore.clear();
       _sessionStartTime = null;
       
       debugPrint('Session data cleared from storage');
@@ -128,14 +111,9 @@ class SessionManager {
   }
 
   /// Clear all session data from local storage (kept for backward compatibility)
-  Future<void> _clearSessionData(SharedPreferences prefs) async {
+  Future<void> _clearSessionData() async {
     try {
-      await prefs.remove(AppConstants.accessTokenKey);
-      await prefs.remove(AppConstants.refreshTokenKey);
-      await prefs.remove(AppConstants.userDataKey);
-      await prefs.remove(_sessionStartTimeKey);
-      await prefs.setBool(AppConstants.isLoggedInKey, false);
-      
+      await AuthSessionStore.clear();
       _sessionStartTime = null;
       
       debugPrint('Session data cleared from storage');
@@ -160,8 +138,15 @@ class SessionManager {
     _sessionStartTime = DateTime.now();
     
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_sessionStartTimeKey, _sessionStartTime!.toIso8601String());
+      final stored = await AuthSessionStore.restore();
+      if (stored != null) {
+        await AuthSessionStore.save(
+          accessToken: stored.accessToken,
+          refreshToken: stored.refreshToken,
+          user: stored.user,
+          sessionStart: _sessionStartTime,
+        );
+      }
       debugPrint('Session reset after login');
     } catch (e) {
       debugPrint('Error resetting session: $e');

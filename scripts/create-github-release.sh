@@ -1,70 +1,107 @@
 #!/bin/bash
 
-# This script is designed to run in CodeMagic post-build
-# It triggers the GitHub Actions workflow to create a release
+# This script runs after the Codemagic build and publishes the local APK/AAB
+# directly to a GitHub release so the website can consume stable assets.
 
-set -e
+set -euo pipefail
 
-echo "🚀 Creating GitHub Release from CodeMagic Build..."
+echo "🚀 Publishing GitHub Release from Codemagic artifacts..."
 
-# Get build information
-BUILD_ID=$(echo $CM_BUILD_ID)
-BUILD_PLATFORM=$(echo $CM_PLATFORM)
-BUILD_NUMBER=$(echo $CM_BUILD_NUMBER)
+if [ -z "${GITHUB_TOKEN:-}" ]; then
+  echo "❌ GITHUB_TOKEN is not set in Codemagic."
+  exit 1
+fi
 
-# Get version from pubspec.yaml
-VERSION=$(grep "version:" pubspec.yaml | head -1 | awk '{print $2}' | cut -d '+' -f1)
+GITHUB_REPO="${GITHUB_REPO:-TECHTUNE-I-T-SOLUTIONS/whispr-mobile}"
+GITHUB_OWNER="${GITHUB_REPO%%/*}"
+GITHUB_NAME="${GITHUB_REPO##*/}"
 
-echo "📦 Build Information:"
-echo "   Version: $VERSION"
-echo "   Build ID: $BUILD_ID"
-echo "   Platform: $BUILD_PLATFORM"
-echo "   Build Number: $BUILD_NUMBER"
+VERSION=$(grep "^version:" pubspec.yaml | head -1 | awk '{print $2}' | cut -d '+' -f1)
+TAG_NAME="v${VERSION}"
+RELEASE_NAME="Whispr Mobile v${VERSION}"
 
-# Trigger GitHub Actions workflow via repository_dispatch
-# This requires: GITHUB_TOKEN environment variable to be set in CodeMagic
+APK_PATH=$(find build/app/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -1)
+AAB_PATH=$(find build/app/outputs/bundle/release -maxdepth 1 -type f -name '*.aab' | head -1)
 
-GITHUB_REPO="TECHTUNE-I-T-SOLUTIONS/whispr-mobile"
-WORKFLOW_TRIGGER_URL="https://api.github.com/repos/${GITHUB_REPO}/dispatches"
+if [ -z "$APK_PATH" ] && [ -z "$AAB_PATH" ]; then
+  echo "❌ No APK or AAB artifact was found in the build output."
+  exit 1
+fi
 
-PAYLOAD=$(cat <<EOF
+API_BASE="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_NAME}"
+AUTH_HEADER="Authorization: Bearer ${GITHUB_TOKEN}"
+COMMON_HEADERS=(
+  -H "$AUTH_HEADER"
+  -H "Accept: application/vnd.github+json"
+  -H "X-GitHub-Api-Version: 2022-11-28"
+)
+
+echo "📦 Version: ${VERSION}"
+echo "🏷️  Tag: ${TAG_NAME}"
+echo "📁 APK: ${APK_PATH:-none}"
+echo "📁 AAB: ${AAB_PATH:-none}"
+
+RELEASE_JSON=$(curl -sS -w '\n%{http_code}' "${COMMON_HEADERS[@]}" "$API_BASE/releases/tags/$TAG_NAME")
+RELEASE_HTTP_STATUS=$(echo "$RELEASE_JSON" | tail -n1)
+RELEASE_BODY=$(echo "$RELEASE_JSON" | sed '$d')
+
+if [ "$RELEASE_HTTP_STATUS" = "404" ]; then
+  echo "🆕 Creating release $TAG_NAME"
+  RELEASE_BODY=$(curl -sS -X POST "${COMMON_HEADERS[@]}" \
+    -d @- "$API_BASE/releases" <<EOF
 {
-  "event_type": "codemagic-build-success",
-  "client_payload": {
-    "version": "$VERSION",
-    "build_id": "$BUILD_ID",
-    "platform": "$BUILD_PLATFORM",
-    "build_number": "$BUILD_NUMBER",
-    "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-  }
+  "tag_name": "$TAG_NAME",
+  "name": "$RELEASE_NAME",
+  "body": "Whispr Mobile ${VERSION}",
+  "draft": false,
+  "prerelease": false
 }
 EOF
 )
+else
+  echo "♻️  Updating existing release $TAG_NAME"
+fi
 
-echo ""
-echo "📡 Triggering GitHub Release Workflow..."
-echo "   Repository: $GITHUB_REPO"
-echo "   Event: codemagic-build-success"
+UPLOAD_URL=$(echo "$RELEASE_BODY" | jq -r '.upload_url' | cut -d'{' -f1)
+RELEASE_ID=$(echo "$RELEASE_BODY" | jq -r '.id')
 
-if [ -z "$GITHUB_TOKEN" ]; then
-  echo "⚠️  GITHUB_TOKEN not set. Cannot trigger GitHub Actions."
-  echo "   Please set GITHUB_TOKEN environment variable in CodeMagic."
+if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
+  echo "❌ Could not determine the GitHub release upload URL."
   exit 1
 fi
 
-RESPONSE=$(curl -s -X POST \
-  -H "Authorization: token $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  -d "$PAYLOAD" \
-  "$WORKFLOW_TRIGGER_URL")
+delete_asset_if_exists() {
+  local asset_name="$1"
+  local asset_id
+  asset_id=$(curl -sS "${COMMON_HEADERS[@]}" "$API_BASE/releases/$RELEASE_ID/assets" | jq -r --arg NAME "$asset_name" '.[] | select(.name == $NAME) | .id' | head -1)
+  if [ -n "$asset_id" ] && [ "$asset_id" != "null" ]; then
+    curl -sS -X DELETE "${COMMON_HEADERS[@]}" "$API_BASE/releases/assets/$asset_id" >/dev/null
+  fi
+}
 
-if echo "$RESPONSE" | grep -q '"message"'; then
-  ERROR=$(echo "$RESPONSE" | grep -o '"message":"[^"]*' | cut -d'"' -f4)
-  echo "❌ Failed to trigger workflow: $ERROR"
-  exit 1
+upload_asset() {
+  local file_path="$1"
+  local content_type="$2"
+  local asset_name
+  asset_name=$(basename "$file_path")
+  delete_asset_if_exists "$asset_name"
+  curl -sS -X POST \
+    -H "$AUTH_HEADER" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "Content-Type: $content_type" \
+    --data-binary "@$file_path" \
+    "$UPLOAD_URL?name=$asset_name"
+}
+
+if [ -n "$APK_PATH" ]; then
+  echo "⬆️  Uploading APK asset"
+  upload_asset "$APK_PATH" "application/vnd.android.package-archive" >/dev/null
 fi
 
-echo "✅ GitHub Release workflow triggered successfully!"
-echo ""
-echo "🎉 Release v$VERSION will be created shortly."
-echo "   Visit: https://github.com/$GITHUB_REPO/releases"
+if [ -n "$AAB_PATH" ]; then
+  echo "⬆️  Uploading AAB asset"
+  upload_asset "$AAB_PATH" "application/octet-stream" >/dev/null
+fi
+
+echo "✅ GitHub release published successfully: https://github.com/${GITHUB_REPO}/releases/tag/${TAG_NAME}"

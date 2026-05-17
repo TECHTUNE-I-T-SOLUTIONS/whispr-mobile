@@ -5,9 +5,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/models/post.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/services/chronicles_service.dart';
+import '../../../core/services/content_cache_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../features/auth/auth_state.dart';
+
+final _chroniclesServiceProvider = Provider((ref) => ChroniclesService(ApiService.instance, ContentCacheService()));
 
 class ChroniclesPostDetailScreen extends ConsumerStatefulWidget {
   final String postId;
@@ -46,17 +50,9 @@ class _ChroniclesPostDetailScreenState extends ConsumerState<ChroniclesPostDetai
   Future<void> _fetchChronicleDetails() async {
     try {
       setState(() => _isLoading = true);
-      final apiService = ref.read(apiServiceProvider);
-
-      // Fetch chronicle post details from chronicles-specific endpoint
-      final response = await apiService.get('/chronicles/posts/${widget.postId}');
-      
-      if (response is! Map<String, dynamic>) {
-        throw Exception('Invalid response format');
-      }
-      
-      final postData = response['data'] ?? response;
+      final postData = await ref.read(_chroniclesServiceProvider).getPost(widget.postId);
       _post = Post.fromJson(postData);
+      final apiService = ref.read(apiServiceProvider);
 
       // Fetch comments for chronicles posts
       try {

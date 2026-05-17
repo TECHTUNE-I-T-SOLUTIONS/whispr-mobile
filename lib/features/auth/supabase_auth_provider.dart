@@ -1,13 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../core/models/chronicles.dart';
 import '../../core/network/api_service.dart';
+import '../../core/services/auth_session_store.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/session_manager.dart';
 
@@ -54,39 +51,22 @@ class AuthState {
 // Auth state notifier class
 class AuthStateNotifier extends StateNotifier<AuthState> {
   final ApiService apiService;
-  SharedPreferences? _prefs;
 
   AuthStateNotifier(this.apiService) : super(AuthState());
-
-  Future<SharedPreferences> _getPrefs() async {
-    _prefs ??= await SharedPreferences.getInstance();
-    return _prefs!;
-  }
 
   // Initialize auth state on app startup
   Future<void> initializeAuth() async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final prefs = await _getPrefs();
-      
-      // Check if tokens exist in storage
-      final accessToken = prefs.getString(AppConstants.accessTokenKey);
-      final refreshToken = prefs.getString(AppConstants.refreshTokenKey);
-      final userDataJson = prefs.getString(AppConstants.userDataKey);
+      final storedSession = await AuthSessionStore.restore();
 
-      debugPrint('Auth initialization: Checking stored credentials...');
-      debugPrint('Access token exists: ${accessToken != null}');
-      debugPrint('User data exists: ${userDataJson != null}');
+      debugPrint('Auth initialization: Checking stored session bundle...');
+      debugPrint('Session bundle exists: ${storedSession != null}');
 
-      if (accessToken != null && userDataJson != null) {
+      if (storedSession != null) {
         try {
-          // Tokens exist, restore session
-          final userMap = jsonDecode(userDataJson) as Map<String, dynamic>;
-          final user = Creator.fromJson(userMap);
-
-          // Set tokens in Supabase client
-          await _setSupabaseTokens(accessToken, refreshToken);
+          await _setSupabaseTokens(storedSession.accessToken, storedSession.refreshToken);
 
           // Initialize push notifications when restoring session
           try {
@@ -100,21 +80,23 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
           state = state.copyWith(
             isLoggedIn: true,
-            user: user,
-            accessToken: accessToken,
-            refreshToken: refreshToken,
+            user: storedSession.user,
+            accessToken: storedSession.accessToken,
+            refreshToken: storedSession.refreshToken,
             isLoading: false,
             error: null,
           );
-          
-          debugPrint('Auth state restored successfully for user: ${user.penName}');
+          await AuthSessionStore.save(
+            accessToken: storedSession.accessToken,
+            refreshToken: storedSession.refreshToken,
+            user: storedSession.user,
+            sessionStart: storedSession.sessionStart,
+          );
+
+          debugPrint('Auth state restored successfully for user: ${storedSession.user.penName}');
         } catch (e) {
           debugPrint('Error restoring session: $e');
-          // If we can't decode the stored data, clear it
-          await prefs.remove(AppConstants.userDataKey);
-          await prefs.remove(AppConstants.accessTokenKey);
-          await prefs.remove(AppConstants.refreshTokenKey);
-          await prefs.setBool(AppConstants.isLoggedInKey, false);
+          await AuthSessionStore.clear();
           
           state = state.copyWith(isLoading: false, error: null);
           debugPrint('Corrupted session data cleared');
@@ -156,15 +138,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final refreshToken = response['refresh_token'] as String?;
 
       // Store tokens and user data persistently
-      final prefs = await _getPrefs();
-      await prefs.setBool(AppConstants.isLoggedInKey, true);
-      await prefs.setString(AppConstants.accessTokenKey, accessToken);
-      if (refreshToken != null) {
-        await prefs.setString(AppConstants.refreshTokenKey, refreshToken);
-      }
-      await prefs.setString(
-        AppConstants.userDataKey,
-        jsonEncode(creator.toJson()),
+      await AuthSessionStore.save(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        user: creator,
       );
 
       debugPrint('User data saved to storage: ${creator.penName}');
@@ -243,15 +220,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final refreshToken = response['refresh_token'] as String?;
 
       // Store tokens and user data persistently
-      final prefs = await _getPrefs();
-      await prefs.setBool(AppConstants.isLoggedInKey, true);
-      await prefs.setString(AppConstants.accessTokenKey, accessToken);
-      if (refreshToken != null) {
-        await prefs.setString(AppConstants.refreshTokenKey, refreshToken);
-      }
-      await prefs.setString(
-        AppConstants.userDataKey,
-        jsonEncode(creator.toJson()),
+      await AuthSessionStore.save(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        user: creator,
       );
 
       debugPrint('User data saved to storage: ${creator.penName}');
@@ -300,14 +272,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       }
       */
 
-      final prefs = await _getPrefs();
-      
-      // Clear storage completely
-      await prefs.remove(AppConstants.isLoggedInKey);
-      await prefs.remove(AppConstants.accessTokenKey);
-      await prefs.remove(AppConstants.refreshTokenKey);
-      await prefs.remove(AppConstants.userDataKey);
-
+      await AuthSessionStore.clear();
       debugPrint('Session data cleared from storage');
 
       // Clear session manager data
@@ -348,10 +313,13 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final newRefreshToken = response['refresh_token'] as String?;
 
       // Store new tokens
-      final prefs = await _getPrefs();
-      await prefs.setString(AppConstants.accessTokenKey, newAccessToken);
-      if (newRefreshToken != null) {
-        await prefs.setString(AppConstants.refreshTokenKey, newRefreshToken);
+      final currentUser = state.user;
+      if (currentUser != null) {
+        await AuthSessionStore.save(
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken ?? state.refreshToken,
+          user: currentUser,
+        );
       }
 
       // Set tokens in Supabase
@@ -387,10 +355,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   // Update user data
   Future<bool> updateUser(Creator updatedUser) async {
     try {
-      final prefs = await _getPrefs();
-      await prefs.setString(
-        AppConstants.userDataKey,
-        jsonEncode(updatedUser.toJson()),
+      await AuthSessionStore.save(
+        accessToken: state.accessToken ?? '',
+        refreshToken: state.refreshToken,
+        user: updatedUser,
       );
 
       state = state.copyWith(user: updatedUser);

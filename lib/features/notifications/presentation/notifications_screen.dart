@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/notifications_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/auth_state.dart';
+
+final _notificationsServiceProvider = Provider((ref) => NotificationsService(ApiService.instance));
 
 class NotificationItem {
   final String id;
@@ -106,19 +109,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     try {
       setState(() => _isLoading = true);
-      final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.get('/chronicles/creator/notifications');
-      if (response['notifications'] != null) {
-        final notifications = (response['notifications'] as List)
-            .map((json) => NotificationItem.fromJson(json))
-            .toList();
-        setState(() {
-          _notifications = notifications;
-          _isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load notifications');
-      }
+      final notifications = await ref.read(_notificationsServiceProvider).getNotifications();
+      setState(() {
+        _notifications = notifications.map((json) => NotificationItem.fromJson(Map<String, dynamic>.from(json))).toList();
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -129,9 +124,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   Future<void> _markAsRead(String notificationId) async {
     try {
-      final apiService = ref.read(apiServiceProvider);
-      // TODO: Replace with actual mark as read endpoint
-      await apiService.put('/notifications/$notificationId/read', data: {});
+      await ref.read(_notificationsServiceProvider).markRead(notificationId);
       setState(() {
         final index = _notifications.indexWhere((n) => n.id == notificationId);
         if (index != -1) {
@@ -153,9 +146,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   Future<void> _markAllAsRead() async {
     try {
-      final apiService = ref.read(apiServiceProvider);
-      // TODO: Replace with actual mark all as read endpoint
-      await apiService.put('/notifications/mark-all-read', data: {});
+      await ref.read(_notificationsServiceProvider).markAllRead();
       setState(() {
         _notifications = _notifications.map((notification) => NotificationItem(
           id: notification.id,

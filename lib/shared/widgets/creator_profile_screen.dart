@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/chronicles.dart';
 import '../../core/models/post.dart';
 import '../../core/network/api_service.dart';
+import '../../core/services/content_cache_service.dart';
+import '../../core/services/profile_service.dart';
 import '../../core/theme/app_theme.dart';
+
+final _profileServiceProvider = Provider((ref) => ProfileService(ApiService.instance, ContentCacheService()));
 
 class CreatorProfileScreen extends ConsumerStatefulWidget {
   final String creatorId;
@@ -30,27 +34,16 @@ class _CreatorProfileScreenState extends ConsumerState<CreatorProfileScreen> {
   Future<void> _fetchCreatorProfile() async {
     try {
       setState(() => _isLoading = true);
-      final apiService = ref.read(apiServiceProvider);
+      final creatorMap = await ref.read(_profileServiceProvider).getCreatorProfile(widget.creatorId);
+      final creator = Creator.fromJson(creatorMap);
 
-      // Fetch creator profile
-      final creatorResponse = await apiService.get('/chronicles/creators/${widget.creatorId}');
-      if (creatorResponse['success'] == true) {
-        final creator = Creator.fromJson(creatorResponse['creator']);
-
-        // Fetch creator's posts
-        final postsResponse = await apiService.get('/chronicles/creators/${widget.creatorId}/posts');
-        final posts = postsResponse['success'] == true
-            ? (postsResponse['posts'] as List).map((json) => Post.fromJson(json)).toList()
-            : <Post>[];
+      final posts = await ref.read(_profileServiceProvider).getCreatorPosts(widget.creatorId);
 
         setState(() {
           _creator = creator;
-          _posts = posts;
+          _posts = posts.map((json) => Post.fromJson(Map<String, dynamic>.from(json))).toList();
           _isLoading = false;
         });
-      } else {
-        throw Exception(creatorResponse['error'] ?? 'Failed to load creator profile');
-      }
     } catch (e) {
       setState(() {
         _error = e.toString();

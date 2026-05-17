@@ -1,11 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/post.dart';
+import '../../../core/services/chronicles_service.dart';
+import '../../../core/services/content_cache_service.dart';
 import '../../../core/network/api_service.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../features/auth/auth_state.dart';
+
+final _chroniclesServiceProvider = Provider((ref) => ChroniclesService(ApiService.instance, ContentCacheService()));
 
 class ChroniclesScreen extends ConsumerStatefulWidget {
   const ChroniclesScreen({super.key});
@@ -14,743 +17,191 @@ class ChroniclesScreen extends ConsumerStatefulWidget {
   ConsumerState<ChroniclesScreen> createState() => _ChroniclesScreenState();
 }
 
-class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> with TickerProviderStateMixin {
+class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
   List<Post> _posts = [];
-  bool _isLoading = false;  // Start as false to allow initial fetch
-  String? _error;
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-  bool _hasAttemptedFetch = false;
+  List<Post> _myPosts = [];
+  bool _loading = true;
+  String _tab = 'all';
 
   @override
-  void initState() {
-    super.initState();
-    _setupAnimations();
-    // Don't fetch immediately - wait for auth state to be ready
-  }
+  void initState() { super.initState(); _load(); }
 
-  void _setupAnimations() {
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
-    );
-    _fadeController.forward();
-  }
-
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final authState = ref.watch(authStateProvider);
-    
-    // Reset fetch flag if user logs out
-    if (!authState.isAuthenticated && _hasAttemptedFetch) {
-      _hasAttemptedFetch = false;
-      _posts.clear();
-      _error = null;
-    }
-  }
-
-  Future<void> _fetchUserPosts() async {
-    final authState = ref.read(authStateProvider);
-    if (!authState.isAuthenticated) {
+  Future<void> _load() async {
+    try {
+      final data = await ref.read(_chroniclesServiceProvider).getPublicChronicles();
+      List<dynamic> mine = const [];
+      try {
+        mine = await ref.read(_chroniclesServiceProvider).getCreatorPosts();
+      } catch (_) {
+        mine = const [];
+      }
+      if (!mounted) return;
       setState(() {
-        _error = 'Please log in to view your chronicles';
-        _isLoading = false;
+        _posts = data.map((e) => Post.fromJson(Map<String, dynamic>.from(e))).toList();
+        _myPosts = mine.map((e) => Post.fromJson(Map<String, dynamic>.from(e))).toList();
+        _loading = false;
       });
-      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
     }
-
-    try {
-      setState(() => _isLoading = true);
-      final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.get('/chronicles/creator/posts');
-      
-      // Check if response has posts
-      if (response is! Map<String, dynamic>) {
-        throw Exception('Invalid response format');
-      }
-      
-      // Parse posts safely
-      final postsList = response['posts'];
-      if (postsList == null) {
-        // Check if this is a 401 error response
-        if (response['error'] != null && response['error'].toString().contains('Unauthorized')) {
-          throw Exception('401: Your session has expired. Please log in again.');
-        }
-        throw Exception('No posts data in response');
-      }
-      
-      if (postsList is! List) {
-        throw Exception('Posts data is not a list');
-      }
-      
-      final posts = postsList.map((json) => Post.fromJson(json)).toList();
-      if (mounted) {
-        setState(() {
-          _posts = posts;
-          _isLoading = false;
-          _error = null;
-        });
-      }
-    } catch (e) {
-      String errorMessage = 'Failed to load your chronicles';
-      final errorStr = e.toString();
-      final runtimeTypeName = e.runtimeType.toString();
-      
-      // Handle UnauthorizedException (401) - session expired
-      if (runtimeTypeName.contains('UnauthorizedException') ||
-          errorStr.contains('UnauthorizedException') ||
-          errorStr.contains('401') || errorStr.contains('Unauthorized') || 
-          errorStr.contains('invalid JWT') || errorStr.contains('token is expired')) {
-        errorMessage = 'Your session has expired. Please log in again.';
-        // Show toast notification
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Session expired. Please log in again.'),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
-        });
-      } else if (errorStr.contains('ForbiddenException')) {
-        errorMessage = 'You do not have permission to view your chronicles.';
-      } else if (errorStr.contains('NetworkException')) {
-        errorMessage = 'Network error. Please check your internet connection.';
-      } else if (e is Exception) {
-        final message = errorStr.replaceAll('Exception: ', '');
-        if (message.isNotEmpty && message != 'Exception') {
-          errorMessage = message;
-        }
-      }
-      
-      if (mounted) {
-        setState(() {
-          _error = errorMessage;
-          _isLoading = false;
-        });
-      }
-      debugPrint('Error fetching user posts: $e');
-    }
-  }
-
-  Future<void> _deletePost(Post post) async {
-    try {
-      final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.delete('/chronicles/posts/${post.id}');
-      
-      if (response['success'] == true || response['message'] == 'Post deleted successfully') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Post deleted successfully')),
-          );
-          // Refresh the posts list
-          await _fetchUserPosts();
-        }
-      } else {
-        throw Exception(response['error'] ?? 'Failed to delete post');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete post: $e')),
-        );
-      }
-    }
-  }
-
-  void _showDeleteConfirmationDialog(Post post) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Chronicle'),
-        content: Text('Are you sure you want to delete "${post.title}"? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _deletePost(post);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authStateProvider);
-
-    // Fetch posts when auth state becomes ready and authenticated (only once)
-    if (authState.isAuthenticated && !_isLoading && _posts.isEmpty && _error == null && !_hasAttemptedFetch) {
-      _hasAttemptedFetch = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fetchUserPosts();
-      });
-    }
-
+    final filtered = _tab == 'all'
+        ? _posts
+        : _posts.where((p) => p.type == _tab).toList();
+    final myChronicles = _myPosts;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Chronicles'),
-        backgroundColor: Theme.of(context).cardColor,
-        elevation: 0,
-        actions: [
-          if (authState.isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.add),
-              onPressed: () {
-                context.go('/chronicles/create');
-              },
-            ),
-        ],
+        title: const Text('Chronicles'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/more'),
+        ),
       ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: authState.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : authState.isAuthenticated
-                ? _buildAuthenticatedView()
-                : _buildUnauthenticatedView(),
+      floatingActionButton: FloatingActionButton(onPressed: () => context.go('/chronicles/create'), child: const Icon(Icons.edit)),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(spacing: 8, children: [
+                  _chip('All', _tab == 'all', () => setState(() => _tab = 'all')),
+                  _chip('Poems', _tab == 'poem', () => setState(() => _tab = 'poem')),
+                  _chip('Blogs', _tab == 'blog', () => setState(() => _tab = 'blog')),
+                  _chip('My Chronicles', _tab == 'mine', () => setState(() => _tab = 'mine')),
+                ]),
+              ),
+            ),
+            if (_loading)
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => const _SkeletonCard(),
+                  childCount: 4,
+                ),
+              )
+            else if (_tab == 'mine' ? myChronicles.isEmpty : filtered.isEmpty)
+              const SliverFillRemaining(child: Center(child: Text('No chronicles yet')))
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => _Card(post: _tab == 'mine' ? myChronicles[i] : filtered[i]),
+                  childCount: _tab == 'mine' ? myChronicles.length : filtered.length,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildAuthenticatedView() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  Widget _chip(String label, bool active, VoidCallback onTap) => ChoiceChip(label: Text(label), selected: active, onSelected: (_) => onTap());
+}
 
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: AppTheme.spacingL),
-            Text(
-              'Oops! Something went wrong',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: AppTheme.spacingS),
-            Text(
-              _error!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppTheme.spacingL),
-            ElevatedButton.icon(
-              onPressed: _fetchUserPosts,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_posts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.elasticOut,
-              builder: (context, value, child) {
-                return Transform.scale(
-                  scale: value,
+class _Card extends StatelessWidget {
+  final Post post;
+  const _Card({required this.post});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: InkWell(
+        onTap: () => context.go('/chronicles/${post.id}'),
+        child: Container(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(28), color: Theme.of(context).cardColor),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            height: 240,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (post.coverImage != null)
+                  CachedNetworkImage(imageUrl: post.coverImage!, fit: BoxFit.cover)
+                else
+                  Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                Positioned.fill(
                   child: Container(
-                    width: 120,
-                    height: 120,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [
-                          AppTheme.primaryColor.withValues(alpha: 0.2),
-                          AppTheme.primaryColor.withValues(alpha: 0.1),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                        colors: [Colors.black.withValues(alpha: 0.05), Colors.black.withValues(alpha: 0.78)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
-                      borderRadius: BorderRadius.circular(60),
-                    ),
-                    child: const Icon(
-                      Icons.book_outlined,
-                      size: 60,
-                      color: AppTheme.primaryColor,
                     ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: AppTheme.spacingL),
-            Text(
-              'Your story begins here',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingS),
-            Text(
-              'Share your thoughts, experiences, and creativity with the world',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppTheme.spacingL),
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 1000),
-              curve: Curves.easeOut,
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      context.go('/chronicles/create');
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Write Your First Chronicle'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.spacingL,
-                        vertical: AppTheme.spacingM,
-                      ),
-                      elevation: 8,
-                      shadowColor: AppTheme.primaryColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      );
-    }
-
-    return CustomScrollView(
-      slivers: [
-        // Hero Section
-        SliverToBoxAdapter(
-          child: Container(
-            height: 200,
-            margin: const EdgeInsets.all(AppTheme.spacingM),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppTheme.primaryColor.withValues(alpha: 0.8),
-                  AppTheme.primaryColor.withValues(alpha: 0.6),
-                  AppTheme.primaryColor.withValues(alpha: 0.4),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  spreadRadius: 2,
                 ),
-              ],
-            ),
-            child: Stack(
-              children: [
                 Positioned.fill(
-                  child: Opacity(
-                    opacity: 0.1,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/Whispr.png'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Spacer(),
+                        Text(post.type.toUpperCase(), style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text(post.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 6),
+                        Text(post.excerpt ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
+                        const SizedBox(height: 8),
+                        Text(post.author.name, style: const TextStyle(color: Colors.white)),
+                      ],
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(AppTheme.spacingL),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 800),
-                        curve: Curves.easeOut,
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, 20 * (1 - value)),
-                              child: Text(
-                                'Your Chronicles',
-                                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: AppTheme.spacingS),
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 1000),
-                        curve: Curves.easeOut,
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, 20 * (1 - value)),
-                              child: Text(
-                                '${_posts.length} ${_posts.length == 1 ? 'story' : 'stories'} shared',
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
                   ),
                 ),
               ],
             ),
           ),
         ),
-
-        // Posts List
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingM),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final post = _posts[index];
-                return TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: Duration(milliseconds: 400 + (index * 100)),
-                  curve: Curves.easeOut,
-                  builder: (context, value, child) {
-                    return Transform.translate(
-                      offset: Offset(0, 30 * (1 - value)),
-                      child: Opacity(
-                        opacity: value,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: AppTheme.spacingM),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 12,
-                                spreadRadius: 1,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Card(
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
-                            ),
-                            child: InkWell(
-                              onTap: () {
-                                context.go('/chronicles/${post.id}');
-                              },
-                              borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Cover image if available
-                                  if (post.coverImage != null)
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(AppTheme.borderRadiusL),
-                                      ),
-                                      child: Container(
-                                        height: 180,
-                                        width: double.infinity,
-                                        color: Theme.of(context).cardColor,
-                                        child: Stack(
-                                          children: [
-                                            Image.network(
-                                              post.coverImage!,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Container(
-                                                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                                                  child: const Center(
-                                                    child: Icon(
-                                                      Icons.image_not_supported,
-                                                      size: 48,
-                                                      color: AppTheme.primaryColor,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                            Positioned(
-                                              top: AppTheme.spacingM,
-                                              right: AppTheme.spacingM,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: AppTheme.spacingS,
-                                                  vertical: AppTheme.spacingXS,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withValues(alpha: 0.7),
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  post.type.toUpperCase(),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                  // Post content
-                                  Padding(
-                                    padding: const EdgeInsets.all(AppTheme.spacingM),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Header with date
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.access_time,
-                                              size: 16,
-                                              color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              post.displayDate,
-                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: AppTheme.spacingM),
-
-                                        // Title
-                                        Text(
-                                          post.title,
-                                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-
-                                        // Excerpt
-                                        if (post.excerpt != null) ...[
-                                          const SizedBox(height: AppTheme.spacingS),
-                                          Text(
-                                            post.excerpt!,
-                                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                              color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                                            ),
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-
-                                        const SizedBox(height: AppTheme.spacingM),
-
-                                        // Stats and actions
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Wrap(
-                                                spacing: AppTheme.spacingS,
-                                                runSpacing: AppTheme.spacingXS,
-                                                children: [
-                                                  if (post.likesCount != null && post.likesCount! > 0)
-                                                    _StatChip(
-                                                      icon: Icons.favorite,
-                                                      label: '${post.likesCount}',
-                                                      color: Colors.red,
-                                                    ),
-                                                  if (post.commentsCount != null && post.commentsCount! > 0)
-                                                    _StatChip(
-                                                      icon: Icons.comment,
-                                                      label: '${post.commentsCount}',
-                                                      color: Colors.blue,
-                                                    ),
-                                                  if (post.viewCount != null && post.viewCount! > 0)
-                                                    _StatChip(
-                                                      icon: Icons.visibility,
-                                                      label: '${post.viewCount}',
-                                                      color: Colors.grey,
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.delete_outline,
-                                                color: Colors.red.withValues(alpha: 0.7),
-                                              ),
-                                              tooltip: 'Delete',
-                                              onPressed: () {
-                                                _showDeleteConfirmationDialog(post);
-                                              },
-                                            ),
-                                            Container(
-                                              decoration: BoxDecoration(
-                                                color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: IconButton(
-                                                icon: const Icon(
-                                                  Icons.arrow_forward,
-                                                  color: AppTheme.primaryColor,
-                                                ),
-                                                onPressed: () {
-                                                  context.go('/chronicles/${post.id}');
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-              childCount: _posts.length,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUnauthenticatedView() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.lock_outline,
-            size: 64,
-            color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: AppTheme.spacingL),
-          Text(
-            'Sign in to view your chronicles',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: AppTheme.spacingL),
-          ElevatedButton(
-            onPressed: () {
-              context.go('/login');
-            },
-            child: const Text('Sign In'),
-          ),
-        ],
       ),
     );
   }
 }
 
-class _StatChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _StatChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingXS,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+    final base = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: Container(
+        height: 240,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: base.withValues(alpha: 0.72)),
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(height: 14, width: 90, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8))),
+                  const SizedBox(height: 10),
+                  Container(height: 24, width: 180, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8))),
+                  const SizedBox(height: 10),
+                  Container(height: 14, width: double.infinity, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8))),
+                  const SizedBox(height: 6),
+                  Container(height: 14, width: 140, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8))),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

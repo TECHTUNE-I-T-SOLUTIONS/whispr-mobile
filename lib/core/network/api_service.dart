@@ -19,8 +19,10 @@ class ApiService {
   static ApiService get instance => _instance;
 
   late final dio.Dio _dio;
+  late final dio.Dio _refreshDio;
   SharedPreferences? _prefs;
   final Completer<void> _initCompleter = Completer<void>();
+  bool _isRefreshingToken = false;
 
   // Private constructor
   ApiService._internal() {
@@ -47,6 +49,18 @@ class ApiService {
             'Accept': 'application/json',
           },
           validateStatus: (status) => status != null && status < 500, // Accept 4xx errors for custom handling
+        ),
+      );
+      _refreshDio = dio.Dio(
+        dio.BaseOptions(
+          baseUrl: AppConstants.baseUrl,
+          connectTimeout: AppConstants.apiTimeout,
+          receiveTimeout: AppConstants.apiTimeout,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
       _setupInterceptors();
@@ -79,10 +93,15 @@ class ApiService {
           // Handle token expiration (401 or 403)
           if ((error.response?.statusCode == 401 || error.response?.statusCode == 403)) {
             try {
+              if (_isRefreshingToken) {
+                return handler.next(error);
+              }
+
               // Attempt to refresh token
               final refreshToken = _prefs?.getString(AppConstants.refreshTokenKey);
               if (refreshToken != null) {
-                final refreshResponse = await _dio.post(
+                _isRefreshingToken = true;
+                final refreshResponse = await _refreshDio.post(
                   '/chronicles/auth/refresh',
                   data: {'refresh_token': refreshToken},
                   options: dio.Options(
@@ -110,6 +129,8 @@ class ApiService {
             } catch (e) {
               // Token refresh failed, user needs to login again
               debugPrint('Token refresh failed: $e');
+            } finally {
+              _isRefreshingToken = false;
             }
           }
 
@@ -236,28 +257,42 @@ class ApiService {
     if (error.response != null) {
       final statusCode = error.response!.statusCode;
       final data = error.response!.data;
+      final message = _extractErrorMessage(data);
 
       switch (statusCode) {
         case 400:
-          return ValidationException(data?['error'] ?? AppConstants.validationError);
+          return ValidationException(message ?? AppConstants.validationError);
         case 401:
-          return UnauthorizedException(data?['error'] ?? AppConstants.unauthorizedError);
+          return UnauthorizedException(message ?? AppConstants.unauthorizedError);
         case 403:
-          return ForbiddenException(data?['error'] ?? 'Access denied');
+          return ForbiddenException(message ?? 'Access denied');
         case 404:
-          return NotFoundException(data?['error'] ?? 'Resource not found');
+          return NotFoundException(message ?? 'Resource not found');
         case 422:
-          return ValidationException(data?['error'] ?? AppConstants.validationError);
+          return ValidationException(message ?? AppConstants.validationError);
         case 500:
         case 502:
         case 503:
-          return ServerException(data?['error'] ?? AppConstants.serverError);
+          return ServerException(message ?? AppConstants.serverError);
         default:
-          return ApiException(data?['error'] ?? 'An unexpected error occurred');
+          return ApiException(message ?? 'An unexpected error occurred');
       }
     }
 
     return NetworkException(AppConstants.networkError);
+  }
+
+  String? _extractErrorMessage(dynamic data) {
+    if (data == null) return null;
+    if (data is Map<String, dynamic>) {
+      final value = data['error'] ?? data['message'] ?? data['detail'];
+      return value?.toString();
+    }
+    if (data is String) {
+      final trimmed = data.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    return data.toString();
   }
 }
 

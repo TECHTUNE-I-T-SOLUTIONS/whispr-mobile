@@ -6,14 +6,18 @@ class AppConstants {
     if (!dotenv.isInitialized) {
       return 'https://whisprwords.vercel.app/api';
     }
-    return dotenv.env['API_BASE_URL'] ?? 'https://whisprwords.vercel.app/api';
+    return dotenv.env['API_BASE_URL'] ??
+        dotenv.env['NEXT_PUBLIC_BASE_URL'] ??
+        'https://whisprwords.vercel.app/api';
   }
 
   static String get localBaseUrl {
     if (!dotenv.isInitialized) {
       return 'https://whisprwords.vercel.app/api';
     }
-    return dotenv.env['API_BASE_URL'] ?? 'https://whisprwords.vercel.app/api';
+    return dotenv.env['API_BASE_URL'] ??
+        dotenv.env['NEXT_PUBLIC_BASE_URL'] ??
+        'https://whisprwords.vercel.app/api';
   }
 
   // Share URL Configuration (for generating shareable links)
@@ -21,7 +25,9 @@ class AppConstants {
     if (!dotenv.isInitialized) {
       return 'https://whisprwords.vercel.app';
     }
-    return dotenv.env['SHARE_BASE_URL'] ?? 'https://whisprwords.vercel.app';
+    return dotenv.env['SHARE_BASE_URL'] ??
+        dotenv.env['NEXT_PUBLIC_WEB_URL'] ??
+        'https://whisprwords.vercel.app';
   }
 
   // Gemini API key stored in .env
@@ -29,7 +35,21 @@ class AppConstants {
     if (!dotenv.isInitialized) {
       return '';
     }
-    return dotenv.env['GEMINI_API_KEY'] ?? '';
+    return dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['NEXT_PUBLIC_GEMINI_API_KEY'] ?? '';
+  }
+
+  static String get supabaseUrl {
+    if (!dotenv.isInitialized) {
+      return '';
+    }
+    return dotenv.env['NEXT_PUBLIC_SUPABASE_URL'] ?? dotenv.env['SUPABASE_URL'] ?? '';
+  }
+
+  static String get supabaseAnonKey {
+    if (!dotenv.isInitialized) {
+      return '';
+    }
+    return dotenv.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? dotenv.env['SUPABASE_ANON_KEY'] ?? '';
   }
 
 

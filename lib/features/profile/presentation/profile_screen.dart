@@ -331,6 +331,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     return Scaffold(
       appBar: AppBar(
         title: const Text('More'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
         backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
         flexibleSpace: Container(
@@ -379,7 +389,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
               // Features Section
               _buildSectionHeader('Features'),
               const SizedBox(height: 8),
-              _buildFeaturesCard(),
+              _buildFeaturesCard(authState),
 
               const SizedBox(height: 24),
 
@@ -582,7 +592,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
     );
   }
 
-  Widget _buildFeaturesCard() {
+  Widget _buildFeaturesCard(AuthState authState) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
@@ -602,6 +612,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
             title: 'My Chronicles',
             subtitle: 'View and manage your writing',
             onTap: () => context.go('/chronicles'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
+            icon: Icons.rule_folder_outlined,
+            title: 'Reviews & Appeals',
+            subtitle: 'View flagged posts and appeal status',
+            onTap: () => context.go('/reviews'),
           ),
           _buildDivider(),
           _buildFeatureItem(
@@ -637,6 +654,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
             title: 'Notifications',
             subtitle: 'View all notifications',
             onTap: () => context.go('/notifications'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
+            icon: Icons.badge_outlined,
+            title: 'Public Portfolio',
+            subtitle: 'Showcase your writing identity',
+            onTap: () => context.go('/portfolio/${authState.user?.penName ?? 'me'}'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
+            icon: Icons.sports_esports_outlined,
+            title: 'Games',
+            subtitle: 'Practice, improve and track streaks',
+            onTap: () => context.go('/games'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
+            icon: Icons.menu_book_outlined,
+            title: 'Guides & Tutorials',
+            subtitle: 'Learn poetry, blogging and more',
+            onTap: () => context.go('/guides'),
           ),
         ],
       ),

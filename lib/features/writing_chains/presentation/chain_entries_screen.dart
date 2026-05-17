@@ -5,8 +5,12 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/models/chronicles.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/services/chains_service.dart';
+import '../../../core/services/content_cache_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/auth_state.dart';
+
+final _chainsServiceProvider = Provider((ref) => ChainsService(ApiService.instance, ContentCacheService()));
 
 class ChainEntriesScreen extends ConsumerStatefulWidget {
   final String chainId;
@@ -76,26 +80,24 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
 
     try {
       if (mounted) setState(() => _isLoading = true);
-      final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.get('/chronicles/chains/${widget.chainId}');
+      final response = await ref.read(_chainsServiceProvider).getChain(widget.chainId);
 
-      if (response['success'] == true) {
-        final data = response['data'];
-        final chain = WritingChain(
-          id: data['id'],
-          title: data['title'],
-          description: data['description'],
-          createdAt: data['created_at'],
-          entriesCount: data['entries']?.length ?? 0,
-        );
+      final data = response;
+      final chain = WritingChain(
+        id: data['id'],
+        title: data['title'],
+        description: data['description'],
+        createdAt: data['created_at'],
+        entriesCount: data['entries']?.length ?? 0,
+      );
 
-        final entries = (data['entries'] as List?)?.map((entry) {
-          final post = entry['post'];
-          return ChainEntry(
-            id: entry['id'],
-            sequence: entry['sequence'],
-            addedAt: entry['added_at'],
-            post: post != null ? PostSummary(
+      final entries = (data['entries'] as List?)?.map((entry) {
+        final post = entry['post'];
+        return ChainEntry(
+          id: entry['id'],
+          sequence: entry['sequence'],
+          addedAt: entry['added_at'],
+          post: post != null ? PostSummary(
               id: post['id'],
               title: post['title'],
               slug: post['slug'],
@@ -111,18 +113,15 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
               commentsCount: post['comments_count'] ?? 0,
               sharesCount: post['shares_count'] ?? 0,
             ) : null,
-          );
-        }).toList() ?? [];
+        );
+      }).toList() ?? [];
 
-        if (mounted) {
-          setState(() {
-            _chain = chain;
-            _entries = entries;
-            _isLoading = false;
-          });
-        }
-      } else {
-        throw Exception(response['error'] ?? 'Failed to load chain details');
+      if (mounted) {
+        setState(() {
+          _chain = chain;
+          _entries = entries;
+          _isLoading = false;
+        });
       }
     } catch (e) {
       String errorMessage = 'Failed to load chain details';

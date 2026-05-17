@@ -44,17 +44,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     try {
       setState(() => _isLoading = true);
       final apiService = ref.read(apiServiceProvider);
-
-      // Try to fetch post details - first try admin posts, then chronicle posts
-      dynamic postResponse;
-      try {
-        postResponse = await apiService.get('/posts/${widget.postId}');
-      } catch (e) {
-        // If admin posts endpoint fails, try chronicles endpoint
-        postResponse = await apiService.get('/chronicles/posts/${widget.postId}');
-      }
-      
-      _post = Post.fromJson(postResponse['data'] ?? postResponse);
+      final postData = await apiService.get('/posts/${widget.postId}');
+      _post = Post.fromJson(Map<String, dynamic>.from(postData));
 
       // Fetch comments (if endpoint exists)
       try {
@@ -218,7 +209,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/chronicles'),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: const Text('Post Details'),
         backgroundColor: Theme.of(context).cardColor,

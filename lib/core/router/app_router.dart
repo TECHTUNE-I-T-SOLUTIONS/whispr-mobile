@@ -18,7 +18,15 @@ import '../../features/writing_chains/presentation/create_chain_entry_screen.dar
 import '../../features/writing_chains/presentation/edit_chain_entry_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/games/presentation/games_screen.dart';
+import '../../features/games/presentation/game_profile_screen.dart';
+import '../../features/guides/presentation/guides_screen.dart';
+import '../../features/guides/presentation/guide_detail_screen.dart';
+import '../../features/profile/presentation/reviews_screen.dart';
+import '../../features/portfolio/presentation/portfolio_screen.dart';
+import '../../features/games/presentation/game_play_screen.dart';
 import '../../features/profile/presentation/profile_details_screen.dart';
+import '../../features/profile/presentation/review_detail_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
 import '../../features/spoken_words/presentation/spoken_words_screen.dart';
 import '../../shared/widgets/main_layout.dart';
@@ -127,8 +135,40 @@ final router = GoRouter(
           builder: (context, state) => const ProfileScreen(),
         ),
         GoRoute(
+          path: '/games',
+          builder: (context, state) => const GamesScreen(),
+        ),
+        GoRoute(
+          path: '/games/profile',
+          builder: (context, state) => const GameProfileScreen(),
+        ),
+        GoRoute(
+          path: '/games/play',
+          builder: (context, state) => GamePlayScreen(game: state.extra as Map<String, dynamic>),
+        ),
+        GoRoute(
+          path: '/guides',
+          builder: (context, state) => const GuidesScreen(),
+        ),
+        GoRoute(
+          path: '/guides/:moduleId',
+          builder: (context, state) => GuideDetailScreen(moduleId: state.pathParameters['moduleId']!),
+        ),
+        GoRoute(
+          path: '/portfolio/:penName',
+          builder: (context, state) => PortfolioScreen(penName: state.pathParameters['penName']!),
+        ),
+        GoRoute(
           path: '/profile-details',
           builder: (context, state) => const ProfileDetailsScreen(),
+        ),
+        GoRoute(
+          path: '/reviews',
+          builder: (context, state) => const ReviewsScreen(),
+        ),
+        GoRoute(
+          path: '/reviews/detail',
+          builder: (context, state) => ReviewDetailScreen(post: state.extra as Map<String, dynamic>),
         ),
         // Post details
         GoRoute(
@@ -183,9 +223,12 @@ final router = GoRouter(
                          state.matchedLocation == '/chronicles' ||
                          state.matchedLocation == '/whispr-wall' ||
                          state.matchedLocation == '/notifications' ||
+                         state.matchedLocation == '/games' ||
+                         state.matchedLocation == '/guides' ||
                          state.matchedLocation.startsWith('/post/') ||
                          state.matchedLocation.startsWith('/chronicles/') ||
-                         state.matchedLocation.startsWith('/creator/');
+                         state.matchedLocation.startsWith('/creator/') ||
+                         state.matchedLocation.startsWith('/portfolio/');
 
     if (!isLoggedIn && !isAuthRoute && !isPublicRoute) {
       return '/login';

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/services/session_manager.dart';
 import '../auth_state.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -73,6 +74,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
       // Initialize auth state from local storage
       debugPrint('[SplashScreen] Starting auth initialization...');
       await ref.read(authStateProvider.notifier).initializeAuth();
+      await SessionManager().initializeSession();
       debugPrint('[SplashScreen] Auth initialization completed');
       
       // Wait for animations

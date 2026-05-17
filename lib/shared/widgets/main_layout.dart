@@ -14,6 +14,7 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
   int _selectedIndex = 0;
+  DateTime? _lastBackPress;
   late AnimationController _animationController;
   late List<Animation<double>> _iconAnimations;
   late final GoRouter _router;
@@ -116,49 +117,79 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      body: widget.child,
-      bottomNavigationBar: Container(
-        height: 80,
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDark
-                ? [
-                    const Color(0xFF1A1A1A).withValues(alpha: 0.8),
-                    const Color(0xFF2A2A2A).withValues(alpha: 0.6),
-                  ]
-                : [
-                    Colors.white.withValues(alpha: 0.8),
-                    const Color(0xFFF8F9FA).withValues(alpha: 0.6),
-                  ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.3)
-                  : Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-              spreadRadius: 2,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_router.canPop()) {
+          context.pop();
+          return;
+        }
+        if (_selectedIndex != 0) {
+          _onItemTapped(0);
+          return;
+        }
+        final now = DateTime.now();
+        final shouldExit = _lastBackPress != null && now.difference(_lastBackPress!) < const Duration(seconds: 2);
+        _lastBackPress = now;
+        if (shouldExit) {
+          context.go('/home');
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Press back again to exit')),
+          );
+        }
+      },
+      child: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity.abs() < 200) return;
+          if (velocity < 0 && _selectedIndex < _routes.length - 1) {
+            _onItemTapped(_selectedIndex + 1);
+          } else if (velocity > 0 && _selectedIndex > 0) {
+            _onItemTapped(_selectedIndex - 1);
+          }
+        },
+        child: Scaffold(
+          body: widget.child,
+          bottomNavigationBar: Container(
+            height: 86,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [
+                        const Color(0xFF1A1A1A).withValues(alpha: 0.8),
+                        const Color(0xFF2A2A2A).withValues(alpha: 0.6),
+                      ]
+                    : [
+                        Colors.white.withValues(alpha: 0.8),
+                        const Color(0xFFF8F9FA).withValues(alpha: 0.6),
+                      ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
-          child: BackdropFilter(
-            filter: ColorFilter.mode(
-              Colors.black.withValues(alpha: 0.1),
-              BlendMode.srcOver,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(
-                _icons.length,
-                (index) => _buildNavItem(index),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(
+                    _icons.length,
+                    (index) => _buildNavItem(index),
+                  ),
+                ),
               ),
             ),
           ),

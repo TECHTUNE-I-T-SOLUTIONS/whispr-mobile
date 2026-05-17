@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/network/api_service.dart';
 import '../../../features/auth/auth_state.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
@@ -17,11 +18,37 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  Map<String, dynamic>? _stats;
+  bool _loadingStats = true;
 
   @override
   void initState() {
     super.initState();
     _setupAnimations();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final authState = ref.read(authStateProvider);
+    final user = authState.user;
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => _loadingStats = false);
+      return;
+    }
+
+    try {
+      final response = await ApiService.instance.get('/chronicles/creator/stats');
+      final stats = Map<String, dynamic>.from(response['creator'] ?? response);
+      if (!mounted) return;
+      setState(() {
+        _stats = stats;
+        _loadingStats = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingStats = false);
+    }
   }
 
   void _setupAnimations() {
@@ -246,14 +273,14 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
               // Profile Statistics Section
               _buildDetailSection(
                 'Profile Statistics',
-                [
-                  _buildDetailItem('Total Posts', user.postCount.toString(), Icons.article_outlined),
-                  _buildDetailItem('Blog Posts', user.totalBlogs.toString(), Icons.description),
-                  _buildDetailItem('Poems', user.totalPoems.toString(), Icons.auto_stories),
-                  _buildDetailItem('Total Followers', user.totalFollowers.toString(), Icons.people_outline),
-                  _buildDetailItem('Total Engagement', user.totalEngagement.toString(), Icons.favorite),
-                  _buildDetailItem('Current Streak', user.currentStreak.toString(), Icons.local_fire_department),
-                  _buildDetailItem('Total Points', user.totalPoints.toString(), Icons.star),
+                _loadingStats ? [_buildDetailItem('Loading', 'Please wait', Icons.hourglass_empty)] : [
+                  _buildDetailItem('Total Posts', '${_stats?['postCount'] ?? user.postCount}', Icons.article_outlined),
+                  _buildDetailItem('Blog Posts', '${_stats?['totalBlogs'] ?? user.totalBlogs}', Icons.description),
+                  _buildDetailItem('Poems', '${_stats?['totalPoems'] ?? user.totalPoems}', Icons.auto_stories),
+                  _buildDetailItem('Total Followers', '${_stats?['totalFollowers'] ?? user.totalFollowers}', Icons.people_outline),
+                  _buildDetailItem('Total Engagement', '${_stats?['totalEngagement'] ?? user.totalEngagement}', Icons.favorite),
+                  _buildDetailItem('Current Streak', '${_stats?['currentStreak'] ?? user.currentStreak}', Icons.local_fire_department),
+                  _buildDetailItem('Total Points', '${_stats?['totalPoints'] ?? user.totalPoints}', Icons.star),
                   _buildDetailItem('Member Since', _formatDate(user.createdAt ?? ''), Icons.calendar_today),
                 ],
                 2,
