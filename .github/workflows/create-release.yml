@@ -1,127 +1,92 @@
-name: Create GitHub Release from CodeMagic Build
+name: Publish Release from APK URL
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'App version (e.g., 1.0.0)'
+        description: 'Release version without prefix, for example 1.1.1'
         required: true
         type: string
-      changelog:
-        description: 'Release changelog/notes'
+      apk_url:
+        description: 'Direct APK URL to download and publish'
+        required: true
+        type: string
+      release_name:
+        description: 'Release title'
         required: false
         type: string
-  repository_dispatch:
-    types: [codemagic-build-success]
+      release_notes:
+        description: 'Optional release notes'
+        required: false
+        type: string
+      tag_name:
+        description: 'Git tag to use for the release'
+        required: false
+        type: string
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
-  create-release:
+  publish-release:
     runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Fetch latest CodeMagic builds
-        id: codemagic
-        env:
-          CODEMAGIC_API_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
-          CODEMAGIC_APP_ID: ${{ secrets.CODEMAGIC_APP_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
         run: |
-          # Fetch latest successful builds
-          RESPONSE=$(curl -s -H "x-auth-token: ${CODEMAGIC_API_TOKEN}" \
-            "https://api.codemagic.io/builds?appId=${CODEMAGIC_APP_ID}&status=finished&limit=10")
-          
-          echo "$RESPONSE" > /tmp/builds.json
-          
-          # Debug: Print response for troubleshooting
-          echo "API Response:"
-          cat /tmp/builds.json
-          echo ""
-          
-          # Check if response is valid JSON and has builds
-          if ! jq empty /tmp/builds.json 2>/dev/null; then
-            echo "❌ Invalid API response. Check CODEMAGIC_API_TOKEN and CODEMAGIC_APP_ID"
-            VERSION=$(grep "version:" pubspec.yaml | head -1 | awk '{print $2}' | cut -d '+' -f1)
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            echo "Release v${VERSION}" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "ios_url=" >> $GITHUB_OUTPUT
-            echo "android_url=" >> $GITHUB_OUTPUT
-            exit 0
+          VERSION='${{ inputs.version }}'
+          TAG_NAME='${{ inputs.tag_name }}'
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="v${VERSION}"
           fi
-          
-          # Try to extract artifacts from builds
-          ARTIFACTS=$(jq -r '.builds[]?.artefacts[]? | select(.url != null) | .url' /tmp/builds.json 2>/dev/null | head -5)
-          
-          echo "Found artifacts:"
-          echo "$ARTIFACTS"
-          echo ""
-          
-          # Extract version from pubspec.yaml or use provided input
-          VERSION="${{ github.event.inputs.version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION=$(grep "version:" pubspec.yaml | head -1 | awk '{print $2}' | cut -d '+' -f1)
+
+          RELEASE_NAME='${{ inputs.release_name }}'
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="Whispr Mobile v${VERSION}"
           fi
-          
-          # Extract changelog
-          CHANGELOG="${{ github.event.inputs.changelog }}"
-          if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="Release v${VERSION}\n\nBuilt with CodeMagic CI/CD"
+
+          NOTES='${{ inputs.release_notes }}'
+          if [ -z "$NOTES" ]; then
+            NOTES=$(cat <<EOF
+Whispr Mobile v${VERSION}
+
+Published from a manually supplied APK URL.
+EOF
+)
           fi
-          
-          # Get first artifact as download URL if available
-          DOWNLOAD_URL=$(echo "$ARTIFACTS" | head -1)
-          
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_OUTPUT
+
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_name=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          curl -L --fail --retry 3 --retry-delay 2 \
+            -o "release-assets/whispr-${{ inputs.version }}.apk" \
+            '${{ inputs.apk_url }}'
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.codemagic.outputs.version }}
-          name: Whispr v${{ steps.codemagic.outputs.version }}
-          body: |
-            ${{ steps.codemagic.outputs.changelog }}
-            
-            ## 📥 Download
-            
-            ${{ steps.codemagic.outputs.download_url != '' && format('📱 [Download APK/IPA]({0})', steps.codemagic.outputs.download_url) || '🔄 Building... Download link will appear shortly' }}
-            
-            ## 📖 Installation Guide
-            
-            Visit [Whispr Download Page](https://whispr.vercel.app/download) for detailed installation instructions.
-            
-            ## 📋 Release Details
-            
-            - **Version**: v${{ steps.codemagic.outputs.version }}
-            - **Date**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            - **Built with**: CodeMagic CI/CD
-            
-            Thank you for using Whispr! 💜
-            
-            - **Version**: v${{ steps.codemagic.outputs.version }}
-            - **Date**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            - **Platform**: iOS & Android
-            - **Build**: CodeMagic CI/CD
-            
-            Thank you for using Whispr! 💜
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.release_name }}
+          body: ${{ steps.meta.outputs.release_notes }}
+          files: release-assets/whispr-${{ inputs.version }}.apk
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
-      - name: Update website download page
+      - name: Summary
+        shell: bash
         run: |
-          echo "Release v${{ steps.codemagic.outputs.version }} created successfully!"
-          echo "The download page will automatically fetch and display this release."
+          echo "Created release ${{ steps.meta.outputs.tag_name }}"
+          echo "APK saved as a GitHub release asset."
