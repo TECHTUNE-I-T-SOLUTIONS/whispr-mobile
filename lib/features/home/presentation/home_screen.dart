@@ -1,5 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide CarouselController;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:go_router/go_router.dart';
@@ -247,10 +247,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           },
         ),
         carouselController: _carouselController,
-        items: features.asMap().entries.map((entry) {
+         items: features.asMap().entries.map((entry) {
           final index = entry.key;
           final feature = entry.value;
           final isActive = index == _currentCarouselIndex;
+          final color = feature['color'] as Color;
+          final title = feature['title'] as String;
+          final subtitle = feature['subtitle'] as String;
+          final icon = feature['icon'] as IconData;
+          final route = feature['route'] as String;
 
           return Builder(
             builder: (BuildContext context) {
@@ -265,15 +270,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   borderRadius: BorderRadius.circular(24),
                   gradient: LinearGradient(
                     colors: [
-                      feature['color'],
-                      feature['color'].withValues(alpha: 0.7),
+                      color,
+                      color.withValues(alpha: 0.7),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: feature['color'].withValues(alpha: isActive ? 0.4 : 0.2),
+                      color: color.withValues(alpha: isActive ? 0.4 : 0.2),
                       blurRadius: isActive ? 20 : 12,
                       offset: const Offset(0, 8),
                       spreadRadius: isActive ? 0 : -2,
@@ -281,7 +286,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
                 child: InkWell(
-                  onTap: () => context.go(feature['route']),
+                  onTap: () => context.go(route),
                   borderRadius: BorderRadius.circular(24),
                   child: Padding(
                     padding: const EdgeInsets.all(20),
@@ -302,7 +307,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ],
                           ),
                           child: Icon(
-                            feature['icon'],
+                            icon,
                             color: Colors.white,
                             size: isActive ? 32 : 28,
                           ),
@@ -320,7 +325,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   fontWeight: FontWeight.w900,
                                   fontSize: isActive ? 20 : 18,
                                 ) ?? const TextStyle(),
-                                child: Text(feature['title']),
+                                child: Text(title),
                               ),
                               const SizedBox(height: 6),
                               AnimatedDefaultTextStyle(
@@ -330,7 +335,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   fontWeight: FontWeight.w500,
                                   fontSize: isActive ? 14 : 13,
                                 ) ?? const TextStyle(),
-                                child: Text(feature['subtitle']),
+                                child: Text(subtitle),
                               ),
                             ],
                           ),

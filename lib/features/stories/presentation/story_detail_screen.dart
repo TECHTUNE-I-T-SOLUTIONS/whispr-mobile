@@ -42,7 +42,7 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
     final service = ref.read(storiesServiceProvider);
 
     if (widget.chapterSlug != null) {
-      final data = await service.getChapterBySlugs(widget.storySlug, widget.chapterSlug);
+      final data = await service.getChapterBySlugs(widget.storySlug, widget.chapterSlug!);
       if (data != null && mounted) {
         setState(() {
           _storyData = data;

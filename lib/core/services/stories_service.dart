@@ -14,7 +14,7 @@ class StoriesService {
     String sortBy = 'latest',
     int limit = 20,
   }) async {
-    var storiesQuery = _supabase
+    dynamic storiesQuery = _supabase
         .from('view_all_stories')
         .select('*')
         .eq('status', 'published');
@@ -48,7 +48,7 @@ class StoriesService {
     storiesQuery = storiesQuery.limit(limit);
 
     final response = await storiesQuery;
-    return response.data ?? [];
+    return List<Map<String, dynamic>>.from(response);
   }
 
   // Get story by slug
@@ -69,18 +69,17 @@ class StoriesService {
     bool includeDrafts = false,
   }) async {
     final table = authorType == 'admin' ? 'admin_story_chapters' : 'chronicles_story_chapters';
-    var query = _supabase
+    dynamic query = _supabase
         .from(table)
         .select('*')
-        .eq('story_id', storyId)
-        .order('sequence', ascending: true);
+        .eq('story_id', storyId);
 
     if (!includeDrafts) {
       query = query.eq('status', 'published');
     }
 
-    final response = await query;
-    return response.data ?? [];
+    final response = await query.order('sequence', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
   }
 
   // Get chapter by slugs
@@ -172,7 +171,7 @@ class StoriesService {
         .eq('status', 'approved')
         .order('created_at', ascending: true);
 
-    return response.data ?? [];
+    return List<Map<String, dynamic>>.from(response);
   }
 
   // Add comment
@@ -188,7 +187,7 @@ class StoriesService {
   }) async {
     // Content compliance check
     final bannedWords = [
-n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
+      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
       'adult stories', 'r-rated', 'nude', 'nudity', 'sensual story', 'sensual stories',
       'lust', 'lustful', 'orgasm', 'penis', 'vagina', 'intercourse', 'arousal', 'nsfw'
     ];
@@ -389,6 +388,6 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .eq('creator_id', creatorId)
         .order('created_at', ascending: false);
 
-    return response.data ?? [];
+    return List<Map<String, dynamic>>.from(response);
   }
 }
