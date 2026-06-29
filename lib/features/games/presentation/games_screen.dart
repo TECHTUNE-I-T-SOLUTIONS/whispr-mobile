@@ -107,41 +107,122 @@ class _GamesScreenState extends State<GamesScreen> {
   }
 
   Widget _hero() => Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(colors: [Color(0xFF111111), Color(0xFF2B1930)]),
+          gradient: LinearGradient(
+            colors: [
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.primaryContainer,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
-        child: const Column(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Play, learn and improve.', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-            SizedBox(height: 8),
-            Text('Modes, streaks and progress all saved to your creator profile.', style: TextStyle(color: Colors.white70)),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.school,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Writing Mastery',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Learn writing principles through interactive challenges',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       );
 
   Widget _starterCard() => Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
           color: Theme.of(context).cardColor,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).shadowColor.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Start with a template', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            const Text('Pick a preconfigured game and let Whispr generate the first challenge around it.'),
+            Row(
+              children: [
+                Icon(
+                  Icons.lightbulb,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Quick Start',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
+            const Text(
+              'Master specific writing skills through focused challenges.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                ActionChip(label: const Text('Poetry prompt'), onPressed: () => _startGame(_fallbackGames().firstWhere((g) => g['game_type'] == 'poem_next_line'))),
-                ActionChip(label: const Text('Blog prompt'), onPressed: () => _startGame(_fallbackGames().firstWhere((g) => g['game_type'] == 'blog_next_line'))),
-                ActionChip(label: const Text('Quiz challenge'), onPressed: () => _startGame(_fallbackGames().firstWhere((g) => g['game_type'] == 'guess_next_line'))),
+                _quickStartChip('Word Choice', 'word_choice_wizard', Icons.spellcheck),
+                _quickStartChip('Tone', 'tone_detective', Icons.tune),
+                _quickStartChip('Show Don\'t Tell', 'show_dont_tell', Icons.visibility),
+                _quickStartChip('Metaphors', 'metaphor_forge', Icons.compare_arrows),
               ],
             ),
           ],
@@ -158,13 +239,16 @@ class _GamesScreenState extends State<GamesScreen> {
 
   Widget _modeCards(List<Map<String, dynamic>> games) {
     final cards = [
-      ('Poetry', 'poem_next_line', Icons.format_quote, const Color(0xFF2A1B3D), 'Continue poetic lines'),
-      ('Blogs', 'blog_next_line', Icons.article_outlined, const Color(0xFF17324D), 'Build clean paragraphs'),
-      ('Quiz', 'guess_next_line', Icons.quiz_outlined, const Color(0xFF3B2A16), 'Pick the best next line'),
+      ('Word Choice', 'word_choice_wizard', Icons.spellcheck, Theme.of(context).colorScheme.primary, 'Master vocabulary precision'),
+      ('Tone Detective', 'tone_detective', Icons.tune, Theme.of(context).colorScheme.secondary, 'Control voice and mood'),
+      ('Show Don\'t Tell', 'show_dont_tell', Icons.visibility, Theme.of(context).colorScheme.tertiary, 'Create vivid imagery'),
+      ('Metaphor Forge', 'metaphor_forge', Icons.compare_arrows, const Color(0xFF7C3AED), 'Build figurative language'),
+      ('Sentence Lab', 'sentence_structure_lab', Icons.account_tree, const Color(0xFF059669), 'Understand syntax'),
+      ('Pacing Master', 'pacing_master', Icons.speed, const Color(0xFFDC2626), 'Control story rhythm'),
     ];
 
     return SizedBox(
-      height: 190,
+      height: 180,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: cards.length,
@@ -172,34 +256,55 @@ class _GamesScreenState extends State<GamesScreen> {
         itemBuilder: (context, index) {
           final card = cards[index];
           final game = games.firstWhere(
-            (g) => g['game_type'] == card.$2,
-            orElse: () => _fallbackGames().firstWhere((g) => g['game_type'] == card.$2),
+            (g) => g['slug'] == card.$2,
+            orElse: () => _fallbackGames().firstWhere((g) => g['slug'] == card.$2, orElse: () => {'slug': card.$2, 'title': card.$1, 'description': card.$4, 'game_type': card.$2}),
           );
 
           return GestureDetector(
             onTap: () => _startGame(game),
             child: Container(
-              width: 210,
+              width: 160,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 gradient: LinearGradient(
-                  colors: [card.$4, card.$4.withValues(alpha: 0.65)],
+                  colors: [card.$4, card.$4.withValues(alpha: 0.7)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: card.$4.withValues(alpha: 0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(card.$3, color: Colors.white, size: 28),
                   const Spacer(),
-                  Text(card.$1, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text(
+                    card.$1,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 4),
-                  Text(card.$5, style: TextStyle(color: Colors.white.withValues(alpha: 0.82))),
-                  const SizedBox(height: 6),
-                  if (card.$2 == 'guess_next_line')
-                    const Text('Best for quick quizzes', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(
+                    card.$5,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 11,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -318,105 +423,158 @@ class _GamesScreenState extends State<GamesScreen> {
   Widget _section(String title, List<Map<String, dynamic>> items, {bool playGames = false}) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           ...items.map(
-            (item) => Card(
+            (item) => Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                ),
+              ),
               child: ListTile(
                 onTap: playGames ? () => _startGame(item) : null,
-                leading: CircleAvatar(child: Text((item['title'] ?? '?').toString().substring(0, 1))),
-                title: Text(item['title'] ?? ''),
-                subtitle: Text(item['description'] ?? item['summary'] ?? ''),
-                trailing: const Icon(Icons.chevron_right),
+                contentPadding: const EdgeInsets.all(16),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    (item['title'] ?? '?').toString().substring(0, 1).toUpperCase(),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  item['title'] ?? '',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  item['description'] ?? item['summary'] ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ),
           if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('No items yet.'),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'No items yet.',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
             ),
         ],
       );
 
+  Widget _quickStartChip(String label, String slug, IconData icon) {
+    return ActionChip(
+      avatar: Icon(icon, size: 18),
+      label: Text(label),
+      onPressed: () => _startGame(_fallbackGames().firstWhere((g) => g['slug'] == slug)),
+      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+      labelStyle: TextStyle(
+        color: Theme.of(context).colorScheme.onPrimaryContainer,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
   Future<void> _startGame(Map<String, dynamic> game) async {
     if (!mounted) return;
-    await context.push('/games/play', extra: game);
+    final gameType = game['game_type']?.toString() ?? '';
+    
+    // Use educational game screen for new game types
+    if (['word_choice', 'tone_matching', 'show_dont_tell', 'metaphor_building', 'sentence_structure', 'pacing_control'].contains(gameType)) {
+      await context.push('/games/educational-play', extra: game);
+    } else {
+      // Use original AI-powered game screen for legacy games
+      await context.push('/games/play', extra: game);
+    }
   }
 
   List<Map<String, dynamic>> _fallbackGames() => [
         {
-          'id': 'poem_next_line',
-          'slug': 'poem_next_line',
-          'title': 'Poetry Continuation',
-          'description': 'Continue a poem with a vivid, emotionally consistent line.',
-          'game_type': 'poem_next_line',
-          'config': {'starter_prompt': 'A silver wind leans over the rooftops and the next line should feel lyrical.'},
+          'id': 'word_choice_wizard',
+          'slug': 'word_choice_wizard',
+          'title': 'Word Choice Wizard',
+          'description': 'Choose the most precise and effective word for each context.',
+          'game_type': 'word_choice',
+          'config': {'topic': 'vocabulary precision'},
         },
         {
-          'id': 'blog_next_line',
-          'slug': 'blog_next_line',
-          'title': 'Blog Builder',
-          'description': 'Continue a blog with a practical, vivid next line.',
-          'game_type': 'blog_next_line',
-          'config': {'starter_prompt': 'A smart blog intro explains why the topic matters before it teaches the reader.'},
+          'id': 'tone_detective',
+          'slug': 'tone_detective',
+          'title': 'Tone Detective',
+          'description': 'Match sentences to their intended tone and audience.',
+          'game_type': 'tone_matching',
+          'config': {'topic': 'voice control'},
         },
         {
-          'id': 'guess_next_line',
-          'slug': 'guess_next_line',
-          'title': 'Guess the Next Line',
-          'description': 'Choose the strongest continuation from a set of options.',
-          'game_type': 'guess_next_line',
-          'config': {'starter_prompt': 'Which line best continues a calm and thoughtful opening?'},
+          'id': 'show_dont_tell',
+          'slug': 'show_dont_tell',
+          'title': 'Show, Don\'t Tell Studio',
+          'description': 'Transform telling sentences into vivid showing ones.',
+          'game_type': 'show_dont_tell',
+          'config': {'topic': 'imagery and sensory details'},
         },
         {
-          'id': 'midnight-poem-flow',
-          'slug': 'midnight-poem-flow',
-          'title': 'Midnight Poem Flow',
-          'description': 'A darker poetic continuation game with moonlit imagery.',
-          'game_type': 'poem_next_line',
-          'config': {'starter_prompt': 'The city sleeps under a violet moon and the next line should deepen the atmosphere.'},
+          'id': 'metaphor_forge',
+          'slug': 'metaphor_forge',
+          'title': 'Metaphor Forge',
+          'description': 'Create powerful metaphors that deepen meaning.',
+          'game_type': 'metaphor_building',
+          'config': {'topic': 'figurative language'},
         },
         {
-          'id': 'garden-poem-walk',
-          'slug': 'garden-poem-walk',
-          'title': 'Garden Poem Walk',
-          'description': 'A gentle, sensory poem continuation about growth and movement.',
-          'game_type': 'poem_next_line',
-          'config': {'starter_prompt': 'A small garden opens after the rain and the next line should feel alive.'},
+          'id': 'sentence_structure_lab',
+          'slug': 'sentence_structure_lab',
+          'title': 'Sentence Structure Lab',
+          'description': 'Identify and understand different sentence structures.',
+          'game_type': 'sentence_structure',
+          'config': {'topic': 'syntax awareness'},
         },
         {
-          'id': 'opinion-blog-builder',
-          'slug': 'opinion-blog-builder',
-          'title': 'Opinion Blog Builder',
-          'description': 'A sharper blog continuation game for opinion pieces and commentary.',
-          'game_type': 'blog_next_line',
-          'config': {'starter_prompt': 'A strong opinion blog opens with a clear claim and the next line should support it.'},
-        },
-        {
-          'id': 'how-to-blog-builder',
-          'slug': 'how-to-blog-builder',
-          'title': 'How-To Blog Builder',
-          'description': 'A practical blog continuation for tutorials and step-by-step posts.',
-          'game_type': 'blog_next_line',
-          'config': {'starter_prompt': 'The guide introduces a helpful task and the next line should explain the first step.'},
-        },
-        {
-          'id': 'tone-match-quiz',
-          'slug': 'tone-match-quiz',
-          'title': 'Tone Match Quiz',
-          'description': 'A quiz game that asks you to match tone and style.',
-          'game_type': 'guess_next_line',
-          'config': {'starter_prompt': 'Which line best matches the soft reflective tone?'},
-        },
-        {
-          'id': 'context-quiz-shift',
-          'slug': 'context-quiz-shift',
-          'title': 'Context Quiz Shift',
-          'description': 'A quiz game focused on preserving context across lines.',
-          'game_type': 'guess_next_line',
-          'config': {'starter_prompt': 'Which line best preserves the meaning of the sentence?'},
+          'id': 'pacing_master',
+          'slug': 'pacing_master',
+          'title': 'Pacing Master',
+          'description': 'Arrange sentences to create different pacing effects.',
+          'game_type': 'pacing_control',
+          'config': {'topic': 'story rhythm'},
         },
       ];
 }

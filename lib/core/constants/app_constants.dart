@@ -4,30 +4,30 @@ class AppConstants {
   // API Configuration
   static String get baseUrl {
     if (!dotenv.isInitialized) {
-      return 'https://whisprwords.vercel.app/api';
+      return 'https://whisprwords.com/api';
     }
     return dotenv.env['API_BASE_URL'] ??
         dotenv.env['NEXT_PUBLIC_BASE_URL'] ??
-        'https://whisprwords.vercel.app/api';
+        'https://whisprwords.com/api';
   }
 
   static String get localBaseUrl {
     if (!dotenv.isInitialized) {
-      return 'https://whisprwords.vercel.app/api';
+      return 'https://whisprwords.com/api';
     }
     return dotenv.env['API_BASE_URL'] ??
         dotenv.env['NEXT_PUBLIC_BASE_URL'] ??
-        'https://whisprwords.vercel.app/api';
+        'https://whisprwords.com/api';
   }
 
   // Share URL Configuration (for generating shareable links)
   static String get shareBaseUrl {
     if (!dotenv.isInitialized) {
-      return 'https://whisprwords.vercel.app';
+      return 'https://whisprwords.com';
     }
     return dotenv.env['SHARE_BASE_URL'] ??
         dotenv.env['NEXT_PUBLIC_WEB_URL'] ??
-        'https://whisprwords.vercel.app';
+        'https://whisprwords.com';
   }
 
   // Gemini API key stored in .env
@@ -88,7 +88,7 @@ class AppConstants {
   static const int maxPostContentLength = 10000;
 
   // Social Sharing
-  static const String appUrl = 'https://whisprwords.vercel.app';
+  static const String appUrl = 'https://whisprwords.com';
   static const String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.whispr.mobile';
   static const String appStoreUrl = 'https://apps.apple.com/app/whispr/id1234567890';
 

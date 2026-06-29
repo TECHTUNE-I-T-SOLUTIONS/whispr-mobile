@@ -25,6 +25,7 @@ import '../../features/guides/presentation/guide_detail_screen.dart';
 import '../../features/profile/presentation/reviews_screen.dart';
 import '../../features/portfolio/presentation/portfolio_screen.dart';
 import '../../features/games/presentation/game_play_screen.dart';
+import '../../features/games/presentation/educational_game_play_screen.dart';
 import '../../features/profile/presentation/profile_details_screen.dart';
 import '../../features/profile/presentation/review_detail_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
@@ -145,6 +146,10 @@ final router = GoRouter(
         GoRoute(
           path: '/games/play',
           builder: (context, state) => GamePlayScreen(game: state.extra as Map<String, dynamic>),
+        ),
+        GoRoute(
+          path: '/games/educational-play',
+          builder: (context, state) => EducationalGamePlayScreen(game: state.extra as Map<String, dynamic>),
         ),
         GoRoute(
           path: '/guides',
