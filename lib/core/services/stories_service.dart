@@ -59,7 +59,7 @@ class StoriesService {
         .eq('slug', slug)
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Get story chapters
@@ -92,14 +92,14 @@ class StoriesService {
     if (story == null) return null;
 
     final table = story['author_type'] == 'admin' ? 'admin_story_chapters' : 'chronicles_story_chapters';
-    final response = await _supabase
+    final chapter = await _supabase
         .from(table)
         .select('*')
         .eq('story_id', story['id'])
         .eq('slug', chapterSlug)
         .single();
 
-    if (response.data == null) return null;
+    if (chapter == null) return null;
 
     // Record view
     final storyTable = story['author_type'] == 'admin' ? 'admin_stories' : 'chronicles_stories';
@@ -116,11 +116,11 @@ class StoriesService {
 
     // Get adjacent chapters
     final allChapters = await getStoryChapters(story['id'], story['author_type'], includeDrafts: false);
-    final currentIndex = allChapters.indexWhere((c) => c['id'] == response.data['id']);
+    final currentIndex = allChapters.indexWhere((c) => c['id'] == chapter['id']);
 
     return {
       'story': story,
-      'chapter': response.data,
+      'chapter': chapter,
       'all_chapters': allChapters,
       'prev_chapter_slug': currentIndex > 0 ? allChapters[currentIndex - 1]['slug'] : null,
       'next_chapter_slug': currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1]['slug'] : null,
@@ -137,7 +137,7 @@ class StoriesService {
         .eq('user_id', userId)
         .maybeSingle();
 
-    return response.data != null;
+    return response != null;
   }
 
   // Like story
@@ -149,7 +149,7 @@ class StoriesService {
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Unlike story
@@ -222,7 +222,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Share story
@@ -249,7 +249,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Get top hashtags
@@ -259,7 +259,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select('*')
         .limit(limit);
 
-    return response.data ?? [];
+    return response;
   }
 
   // Create chronicles story (for creators)
@@ -287,7 +287,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Update chronicles story
@@ -318,7 +318,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Create story chapter
@@ -355,7 +355,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Update story chapter
@@ -378,7 +378,7 @@ n      'sex', 'porn', 'pornographic', 'erotica', 'erotic', 'xxx', 'adult story',
         .select()
         .single();
 
-    return response.data;
+    return response;
   }
 
   // Get creator's stories
