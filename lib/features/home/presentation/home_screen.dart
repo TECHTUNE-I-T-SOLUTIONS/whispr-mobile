@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/post.dart';
@@ -24,7 +25,9 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final PageController _pageController = PageController();
+  final CarouselController _carouselController = CarouselController();
   int _tabIndex = 0;
+  int _currentCarouselIndex = 0;
   List<Post> _adminPosts = [];
   List<Post> _chroniclePosts = [];
   List<dynamic> _chains = [];
@@ -38,6 +41,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _carouselController.dispose();
     super.dispose();
   }
 
@@ -71,23 +75,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _hero(context)),
+            SliverToBoxAdapter(child: _featureCarousel(context)),
             SliverToBoxAdapter(child: _tabBar()),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 560,
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) => setState(() => _tabIndex = index),
-                  children: [
-                    _discoverView(context),
-                    _adminFeedView(context),
-                    _chroniclesFeedView(context),
-                    _gamesView(context),
-                  ],
-                ),
+            SliverFillRemaining(
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) => setState(() => _tabIndex = index),
+                children: [
+                  _discoverView(context),
+                  _adminFeedView(context),
+                  _chroniclesFeedView(context),
+                  _gamesView(context),
+                ],
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
       ),
@@ -103,17 +104,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           gradient: LinearGradient(
             colors: [
               Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
               Theme.of(context).colorScheme.primaryContainer,
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
+            stops: const [0.0, 0.5, 1.0],
           ),
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+              spreadRadius: 0,
             ),
           ],
         ),
@@ -123,18 +127,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Icon(
                     Icons.auto_awesome,
                     color: Colors.white,
-                    size: 28,
+                    size: 32,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 18),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,14 +154,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         'Welcome to Whispr',
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           color: Colors.white,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         'Discover stories, improve your craft',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: Colors.white.withValues(alpha: 0.95),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -158,19 +171,187 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _pill('Admin', Icons.edit_note_outlined),
-                _pill('Chronicles', Icons.auto_stories_outlined),
-                _pill('Chains', Icons.link_outlined),
-                _pill('Games', Icons.sports_esports_outlined),
-              ],
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _pill('Admin', Icons.edit_note_outlined),
+                  _pill('Chronicles', Icons.auto_stories_outlined),
+                  _pill('Chains', Icons.link_outlined),
+                  _pill('Games', Icons.sports_esports_outlined),
+                ],
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _featureCarousel(BuildContext context) {
+    final features = [
+      {
+        'title': 'AI-Powered Games',
+        'subtitle': 'Master writing with intelligent feedback',
+        'icon': Icons.psychology,
+        'color': Theme.of(context).colorScheme.primary,
+        'route': '/games',
+      },
+      {
+        'title': 'Read Stories',
+        'subtitle': 'Discover captivating tales from creators',
+        'icon': Icons.auto_stories,
+        'color': Theme.of(context).colorScheme.secondary,
+        'route': '/stories',
+      },
+      {
+        'title': 'Create Chronicles',
+        'subtitle': 'Share your writing with the world',
+        'icon': Icons.edit_note,
+        'color': Theme.of(context).colorScheme.tertiary,
+        'route': '/chronicles/create',
+      },
+      {
+        'title': 'Join Chains',
+        'subtitle': 'Collaborate on collaborative stories',
+        'icon': Icons.link,
+        'color': const Color(0xFF7C3AED),
+        'route': '/chains',
+      },
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: CarouselSlider(
+        options: CarouselOptions(
+          height: 140,
+          viewportFraction: 0.9,
+          enlargeCenterPage: true,
+          autoPlay: true,
+          autoPlayInterval: const Duration(seconds: 5),
+          autoPlayAnimationDuration: const Duration(milliseconds: 800),
+          autoPlayCurve: Curves.easeInOutCubic,
+          onPageChanged: (index, reason) {
+            setState(() => _currentCarouselIndex = index);
+          },
+        ),
+        carouselController: _carouselController,
+        items: features.asMap().entries.map((entry) {
+          final index = entry.key;
+          final feature = entry.value;
+          final isActive = index == _currentCarouselIndex;
+
+          return Builder(
+            builder: (BuildContext context) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                margin: EdgeInsets.symmetric(
+                  horizontal: isActive ? 4 : 12,
+                  vertical: isActive ? 0 : 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(
+                    colors: [
+                      feature['color'],
+                      feature['color'].withValues(alpha: 0.7),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: feature['color'].withValues(alpha: isActive ? 0.4 : 0.2),
+                      blurRadius: isActive ? 20 : 12,
+                      offset: const Offset(0, 8),
+                      spreadRadius: isActive ? 0 : -2,
+                    ),
+                  ],
+                ),
+                child: InkWell(
+                  onTap: () => context.go(feature['route']),
+                  borderRadius: BorderRadius.circular(24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: EdgeInsets.all(isActive ? 16 : 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(isActive ? 20 : 16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            feature['icon'],
+                            color: Colors.white,
+                            size: isActive ? 32 : 28,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 300),
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: isActive ? 20 : 18,
+                                ) ?? const TextStyle(),
+                                child: Text(feature['title']),
+                              ),
+                              const SizedBox(height: 6),
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 300),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.95),
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: isActive ? 14 : 13,
+                                ) ?? const TextStyle(),
+                                child: Text(feature['subtitle']),
+                              ),
+                            ],
+                          ),
+                        ),
+                        AnimatedScale(
+                          duration: const Duration(milliseconds: 300),
+                          scale: isActive ? 1.0 : 0.8,
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white.withValues(alpha: 0.8),
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        }).toList(),
       ),
     );
   }
@@ -256,11 +437,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ...chronicles.take(6).map((post) => _feedCard(context, post)),
         _sectionHeader(context, 'Writing chains', 'Browse collaborative stories'),
         ..._chains.take(6).map((chain) => Container(
-              margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 12),
+          child: GestureDetector(
+            onTap: () => context.go('/chains/${(chain as Map<String, dynamic>)['id']}'),
+            child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(24)),
               child: Text((chain as Map<String, dynamic>)['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
-            )),
+            ),
+          ),
+        )),
       ],
     );
   }
@@ -339,17 +525,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         scrollDirection: Axis.horizontal,
         itemBuilder: (context, i) {
           final chain = _chains[i] as Map<String, dynamic>;
-          return Container(
-            width: 220,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(22)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(chain['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              Text(chain['description'] ?? '', maxLines: 3, overflow: TextOverflow.ellipsis),
-              const Spacer(),
-              Text('${chain['entries_count'] ?? 0} entries', style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
-            ]),
+          return GestureDetector(
+            onTap: () => context.go('/chains/${chain['id']}'),
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(22)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(chain['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Text(chain['description'] ?? '', maxLines: 3, overflow: TextOverflow.ellipsis),
+                const Spacer(),
+                Text('${chain['entries_count'] ?? 0} entries', style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
+              ]),
+            ),
           );
         },
         separatorBuilder: (context, index) => const SizedBox(width: 12),
@@ -359,12 +548,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _pill(String label, IconData icon) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(999),
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.3),
+            color: Colors.white.withValues(alpha: 0.25),
             width: 1,
           ),
         ),
@@ -381,8 +570,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 fontSize: 13,
+                letterSpacing: 0.3,
               ),
             ),
           ],
@@ -394,18 +584,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+            width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(context).shadowColor.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Theme.of(context).shadowColor.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+              spreadRadius: 0,
             ),
           ],
         ),
@@ -413,31 +605,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primaryContainer,
+                    Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.7),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Icon(
                 icon,
-                size: 24,
+                size: 26,
                 color: Theme.of(context).colorScheme.onPrimaryContainer,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Text(
               title,
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.3,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               subtitle,
               style: TextStyle(
-                color: Theme.of(context).textTheme.bodySmall?.color,
+                color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.8),
                 fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -474,20 +682,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 errorWidget: (context, url, error) => Container(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.broken_image,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  child: Image.asset('assets/images/Whispr.png', fit: BoxFit.contain),
                 ),
               )
             else
               Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Icon(
-                  Icons.article,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  size: 48,
-                ),
+                child: Image.asset('assets/images/Whispr.png', fit: BoxFit.contain),
               ),
             Container(
               decoration: BoxDecoration(
@@ -598,10 +799,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         errorWidget: (context, url, error) => Container(
                           height: 200,
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: Icon(
-                            Icons.broken_image,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                          child: Image.asset('assets/images/Whispr.png', fit: BoxFit.contain),
                         ),
                       ),
                     ),

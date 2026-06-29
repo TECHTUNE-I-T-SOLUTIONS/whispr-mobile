@@ -20,6 +20,7 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
   bool _isPosting = false;
   bool _mounted = true;
   late AnimationController _listAnimationController;
+  final Set<String> _expandedPosts = <String>{}; // Track which posts have expanded replies
 
   @override
   void initState() {
@@ -648,7 +649,8 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
                                   // Admin Responses
                                   if (post.responses != null && post.responses!.isNotEmpty) ...[
                                     const SizedBox(height: AppTheme.spacingL),
-                                    ...post.responses!.map((response) => Container(
+                                    // Show first reply or all if expanded
+                                    ...(_expandedPosts.contains(post.id) ? post.responses! : [post.responses!.first]).map((response) => Container(
                                       margin: const EdgeInsets.only(bottom: AppTheme.spacingM),
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
@@ -782,6 +784,56 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
                                         ),
                                       ),
                                     )),
+                                    // Expand/Collapse button if there are multiple replies
+                                    if (post.responses!.length > 1) ...[
+                                      const SizedBox(height: AppTheme.spacingS),
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            if (_expandedPosts.contains(post.id)) {
+                                              _expandedPosts.remove(post.id);
+                                            } else {
+                                              _expandedPosts.add(post.id);
+                                            }
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: AppTheme.spacingM,
+                                            vertical: AppTheme.spacingS,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                                            borderRadius: BorderRadius.circular(AppTheme.borderRadiusS),
+                                            border: Border.all(
+                                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                _expandedPosts.contains(post.id) ? Icons.expand_less : Icons.expand_more,
+                                                size: 16,
+                                                color: Theme.of(context).colorScheme.primary,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                _expandedPosts.contains(post.id)
+                                                    ? 'Show less'
+                                                    : 'Show ${post.responses!.length - 1} more replies',
+                                                style: TextStyle(
+                                                  color: Theme.of(context).colorScheme.primary,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
 
                                   // Timestamp

@@ -26,6 +26,9 @@ import '../../features/profile/presentation/reviews_screen.dart';
 import '../../features/portfolio/presentation/portfolio_screen.dart';
 import '../../features/games/presentation/game_play_screen.dart';
 import '../../features/games/presentation/educational_game_play_screen.dart';
+import '../../features/stories/presentation/stories_screen.dart';
+import '../../features/stories/presentation/story_detail_screen.dart';
+import '../../features/stories/presentation/create_story_screen.dart';
 import '../../features/profile/presentation/profile_details_screen.dart';
 import '../../features/profile/presentation/review_detail_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
@@ -150,6 +153,31 @@ final router = GoRouter(
         GoRoute(
           path: '/games/educational-play',
           builder: (context, state) => EducationalGamePlayScreen(game: state.extra as Map<String, dynamic>),
+        ),
+        GoRoute(
+          path: '/stories',
+          builder: (context, state) => const StoriesScreen(),
+        ),
+        GoRoute(
+          path: '/stories/:slug',
+          builder: (context, state) {
+            final slug = state.pathParameters['slug']!;
+            return StoryDetailScreen(storySlug: slug);
+          },
+          routes: [
+            GoRoute(
+              path: 'chapter/:chapterSlug',
+              builder: (context, state) {
+                final slug = state.pathParameters['slug']!;
+                final chapterSlug = state.pathParameters['chapterSlug']!;
+                return StoryDetailScreen(storySlug: slug, chapterSlug: chapterSlug);
+              },
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/stories/create',
+          builder: (context, state) => const CreateStoryScreen(),
         ),
         GoRoute(
           path: '/guides',

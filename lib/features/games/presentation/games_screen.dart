@@ -67,9 +67,6 @@ class _GamesScreenState extends State<GamesScreen> {
   @override
   Widget build(BuildContext context) {
     final games = _games.isEmpty ? _fallbackGames() : _games;
-    final poemGames = games.where((g) => g['game_type'] == 'poem_next_line').toList();
-    final blogGames = games.where((g) => g['game_type'] == 'blog_next_line').toList();
-    final quizGames = games.where((g) => g['game_type'] == 'guess_next_line').toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -95,9 +92,7 @@ class _GamesScreenState extends State<GamesScreen> {
                 SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _progressHeader(games.length))),
                 if (_selectedTab == 'games') ...[
                   SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _modeCards(games))),
-                  SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _section('Poetry Games', poemGames, playGames: true))),
-                  SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _section('Blog Games', blogGames, playGames: true))),
-                  SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _section('Quiz Games', quizGames, playGames: true))),
+                  SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _allGamesSection(games))),
                 ] else ...[
                   SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _section('Guides & Tutorials', _modules))),
                 ],
@@ -195,13 +190,13 @@ class _GamesScreenState extends State<GamesScreen> {
             Row(
               children: [
                 Icon(
-                  Icons.lightbulb,
+                  Icons.psychology,
                   color: Theme.of(context).colorScheme.primary,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'Quick Start',
+                  'AI-Powered Learning',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -211,7 +206,7 @@ class _GamesScreenState extends State<GamesScreen> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Master specific writing skills through focused challenges.',
+              'Get personalized hints and feedback as you master writing skills.',
               style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -223,6 +218,8 @@ class _GamesScreenState extends State<GamesScreen> {
                 _quickStartChip('Tone', 'tone_detective', Icons.tune),
                 _quickStartChip('Show Don\'t Tell', 'show_dont_tell', Icons.visibility),
                 _quickStartChip('Metaphors', 'metaphor_forge', Icons.compare_arrows),
+                _quickStartChip('Dialogue', 'dialogue_dynamics', Icons.chat_bubble),
+                _quickStartChip('Character', 'character_development', Icons.person),
               ],
             ),
           ],
@@ -239,12 +236,17 @@ class _GamesScreenState extends State<GamesScreen> {
 
   Widget _modeCards(List<Map<String, dynamic>> games) {
     final cards = [
-      ('Word Choice', 'word_choice_wizard', Icons.spellcheck, Theme.of(context).colorScheme.primary, 'Master vocabulary precision'),
-      ('Tone Detective', 'tone_detective', Icons.tune, Theme.of(context).colorScheme.secondary, 'Control voice and mood'),
-      ('Show Don\'t Tell', 'show_dont_tell', Icons.visibility, Theme.of(context).colorScheme.tertiary, 'Create vivid imagery'),
-      ('Metaphor Forge', 'metaphor_forge', Icons.compare_arrows, const Color(0xFF7C3AED), 'Build figurative language'),
-      ('Sentence Lab', 'sentence_structure_lab', Icons.account_tree, const Color(0xFF059669), 'Understand syntax'),
-      ('Pacing Master', 'pacing_master', Icons.speed, const Color(0xFFDC2626), 'Control story rhythm'),
+      ('Word Choice', 'word_choice_wizard', Icons.spellcheck, Theme.of(context).colorScheme.primary, 'Master vocabulary precision', 'AI hints available'),
+      ('Tone Detective', 'tone_detective', Icons.tune, Theme.of(context).colorScheme.secondary, 'Control voice and mood', 'AI feedback enabled'),
+      ('Show Don\'t Tell', 'show_dont_tell', Icons.visibility, Theme.of(context).colorScheme.tertiary, 'Create vivid imagery', 'AI suggestions'),
+      ('Metaphor Forge', 'metaphor_forge', Icons.compare_arrows, const Color(0xFF7C3AED), 'Build figurative language', 'AI-powered'),
+      ('Sentence Lab', 'sentence_structure_lab', Icons.account_tree, const Color(0xFF059669), 'Understand syntax', 'AI explanations'),
+      ('Pacing Master', 'pacing_master', Icons.speed, const Color(0xFFDC2626), 'Control story rhythm', 'AI analysis'),
+      ('Dialogue Dynamics', 'dialogue_dynamics', Icons.chat_bubble, const Color(0xFF0891B2), 'Master dialogue craft', 'AI coaching'),
+      ('Character Lab', 'character_development', Icons.person, const Color(0xFFEA580C), 'Create compelling characters', 'AI insights'),
+      ('Setting the Scene', 'setting_scene', Icons.landscape, const Color(0xFF65A30D), 'Build immersive settings', 'AI guidance'),
+      ('POV Mastery', 'pov_mastery', Icons.visibility, const Color(0xFF9333EA), 'Master perspectives', 'AI tips'),
+      ('Plot Architect', 'plot_structure', Icons.account_tree, const Color(0xFFBE185D), 'Structure narratives', 'AI assistance'),
     ];
 
     return SizedBox(
@@ -283,13 +285,40 @@ class _GamesScreenState extends State<GamesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(card.$3, color: Colors.white, size: 28),
+                  Row(
+                    children: [
+                      Icon(card.$3, color: Colors.white, size: 24),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome, color: Colors.white, size: 10),
+                            const SizedBox(width: 2),
+                            Text(
+                              card.$6,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   const Spacer(),
                   Text(
                     card.$1,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
                     maxLines: 2,
@@ -300,7 +329,7 @@ class _GamesScreenState extends State<GamesScreen> {
                     card.$5,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 11,
+                      fontSize: 10,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -420,7 +449,7 @@ class _GamesScreenState extends State<GamesScreen> {
     );
   }
 
-  Widget _section(String title, List<Map<String, dynamic>> items, {bool playGames = false}) => Column(
+  Widget _allGamesSection(List<Map<String, dynamic>> games) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 20),
@@ -435,9 +464,9 @@ class _GamesScreenState extends State<GamesScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                title,
-                style: const TextStyle(
+              const Text(
+                'All Games',
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
@@ -445,7 +474,7 @@ class _GamesScreenState extends State<GamesScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          ...items.map(
+          ...games.map(
             (item) => Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
@@ -456,7 +485,7 @@ class _GamesScreenState extends State<GamesScreen> {
                 ),
               ),
               child: ListTile(
-                onTap: playGames ? () => _startGame(item) : null,
+                onTap: () => _startGame(item),
                 contentPadding: const EdgeInsets.all(16),
                 leading: Container(
                   padding: const EdgeInsets.all(10),
@@ -488,11 +517,11 @@ class _GamesScreenState extends State<GamesScreen> {
               ),
             ),
           ),
-          if (items.isEmpty)
+          if (games.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'No items yet.',
+                'No games yet.',
                 style: TextStyle(
                   color: Theme.of(context).textTheme.bodySmall?.color,
                 ),
@@ -516,15 +545,8 @@ class _GamesScreenState extends State<GamesScreen> {
 
   Future<void> _startGame(Map<String, dynamic> game) async {
     if (!mounted) return;
-    final gameType = game['game_type']?.toString() ?? '';
-    
-    // Use educational game screen for new game types
-    if (['word_choice', 'tone_matching', 'show_dont_tell', 'metaphor_building', 'sentence_structure', 'pacing_control'].contains(gameType)) {
-      await context.push('/games/educational-play', extra: game);
-    } else {
-      // Use original AI-powered game screen for legacy games
-      await context.push('/games/play', extra: game);
-    }
+    // All games now use the educational game screen
+    await context.push('/games/educational-play', extra: game);
   }
 
   List<Map<String, dynamic>> _fallbackGames() => [
@@ -575,6 +597,46 @@ class _GamesScreenState extends State<GamesScreen> {
           'description': 'Arrange sentences to create different pacing effects.',
           'game_type': 'pacing_control',
           'config': {'topic': 'story rhythm'},
+        },
+        {
+          'id': 'dialogue_dynamics',
+          'slug': 'dialogue_dynamics',
+          'title': 'Dialogue Dynamics',
+          'description': 'Master the art of writing natural, engaging dialogue.',
+          'game_type': 'dialogue_writing',
+          'config': {'topic': 'dialogue craft'},
+        },
+        {
+          'id': 'character_development',
+          'slug': 'character_development',
+          'title': 'Character Development Lab',
+          'description': 'Create compelling, multi-dimensional characters.',
+          'game_type': 'character_building',
+          'config': {'topic': 'character creation'},
+        },
+        {
+          'id': 'setting_scene',
+          'slug': 'setting_scene',
+          'title': 'Setting the Scene',
+          'description': 'Create immersive settings that support story and mood.',
+          'game_type': 'setting_craft',
+          'config': {'topic': 'world building'},
+        },
+        {
+          'id': 'pov_mastery',
+          'slug': 'pov_mastery',
+          'title': 'Point of View Mastery',
+          'description': 'Understand and master different narrative perspectives.',
+          'game_type': 'pov_control',
+          'config': {'topic': 'narrative perspective'},
+        },
+        {
+          'id': 'plot_structure',
+          'slug': 'plot_structure',
+          'title': 'Plot Structure Architect',
+          'description': 'Understand story structure and create compelling narratives.',
+          'game_type': 'plot_building',
+          'config': {'topic': 'narrative structure'},
         },
       ];
 }

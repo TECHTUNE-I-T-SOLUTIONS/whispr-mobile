@@ -33,7 +33,7 @@ A complete system that allows users to:
 ```
 User Shares Chronicle
   ↓
-Share URL: https://whisprwords.vercel.app/api/deeplink?type=chronicles&id=UUID
+Share URL: https://whisprwords.com/api/deeplink?type=chronicles&id=UUID
   ↓
 Recipient Opens Link
   ↓

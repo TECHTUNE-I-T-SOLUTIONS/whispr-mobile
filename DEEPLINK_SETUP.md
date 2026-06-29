@@ -12,16 +12,16 @@ The deep linking system allows users to share chronicles posts via links that:
 ```
 Shared Link
     ↓
-https://whisprwords.vercel.app/api/deeplink?type=chronicles&id=UUID
+https://whisprwords.com/api/deeplink?type=chronicles&id=UUID
     ↓
 Backend detects device type (mobile/desktop)
     ↓
 Mobile: Redirects to → whispr://app/chronicles/UUID → Mobile App (com.whispr.whisprmobile)
-Web/Desktop: Redirects to → https://whisprwords.vercel.app/chronicles/UUID
+Web/Desktop: Redirects to → https://whisprwords.com/chronicles/UUID
 
 Website Smart Banner:
     ↓
-User visits https://whisprwords.vercel.app/chronicles/UUID
+User visits https://whisprwords.com/chronicles/UUID
     ↓
 AppBanner detects mobile device
     ↓
@@ -39,7 +39,7 @@ If app not installed: Shows store download button
 - **File**: `android/app/src/main/AndroidManifest.xml`
 - **Added**: Deep link intent filters for:
   - Custom scheme: `whispr://`
-  - HTTPS URLs: `https://whisprwords.vercel.app/chronicles/*`
+  - HTTPS URLs: `https://whisprwords.com/chronicles/*`
 
 #### iOS Configuration  
 - **File**: `ios/Runner/Info.plist`
@@ -84,7 +84,7 @@ If app not installed: Shows store download button
 #### Flutter `.env` Files
 ```env
 API_BASE_URL=http://192.168.1.116:3000/api        # Local backend
-SHARE_BASE_URL=https://whisprwords.vercel.app     # Web domain for shares
+SHARE_BASE_URL=https://whisprwords.com     # Web domain for shares
 ```
 
 #### Next.js Environment
@@ -101,7 +101,7 @@ SHARE_BASE_URL=https://whisprwords.vercel.app     # Web domain for shares
 
 ### User Shares a Chronicle:
 1. User taps Share button on chronicle detail screen
-2. Share URL is: `https://whisprwords.vercel.app/api/deeplink?type=chronicles&id={UUID}`
+2. Share URL is: `https://whisprwords.com/api/deeplink?type=chronicles&id={UUID}`
 3. Share tracking API call to `/chronicles/posts/{id}/shares`
 
 ### Recipient Opens the Link:
@@ -143,7 +143,7 @@ adb shell am start -W -a android.intent.action.VIEW \
 
 # Or from web link:
 adb shell am start -W -a android.intent.action.VIEW \
-  -d "https://whisprwords.vercel.app/api/deeplink?type=chronicles&id=f8966533-7fa4-4b45-9f46-b49af86c21f6"
+  -d "https://whisprwords.com/api/deeplink?type=chronicles&id=f8966533-7fa4-4b45-9f46-b49af86c21f6"
 ```
 
 ### iOS
@@ -175,7 +175,7 @@ adb shell am start -W -a android.intent.action.VIEW \
 
 # Using web fallback
 adb shell am start -W -a android.intent.action.VIEW \
-  -d "https://whisprwords.vercel.app/api/deeplink?type=chronicles&id=f8966533-7fa4-4b45-9f46-b49af86c21f6"
+  -d "https://whisprwords.com/api/deeplink?type=chronicles&id=f8966533-7fa4-4b45-9f46-b49af86c21f6"
 ```
 
 ## Supported Deep Link Types
@@ -236,11 +236,11 @@ Future<void> _trackDeepLinkOpen(String type, String id) async {
 1. Check backend is running and accessible
 2. Verify post ID is valid UUID format
 3. Check `/api/deeplink` endpoint returns 200 OK
-4. Test URL in browser: `https://whisprwords.vercel.app/api/deeplink?type=chronicles&id={UUID}`
+4. Test URL in browser: `https://whisprwords.com/api/deeplink?type=chronicles&id={UUID}`
 
 ### Web Fallback Not Showing:
 1. Check browser supports JavaScript (needed for redirect)
-2. Verify `https://whisprwords.vercel.app/chronicles/{id}` exists and is public
+2. Verify `https://whisprwords.com/chronicles/{id}` exists and is public
 3. Check 2-second timeout in deeplink route HTML
 
 ## Files Modified

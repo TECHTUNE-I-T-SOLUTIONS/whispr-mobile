@@ -4,7 +4,7 @@
 
 We are building the complete mobile application version of:
 
-https://whisprwords.vercel.app
+https://whisprwords.com
 
 This is a production-ready web platform.
 We are NOT rebuilding backend.
@@ -12,7 +12,7 @@ We are NOT rebuilding backend.
 We are building a scalable, production-grade Flutter mobile client
 that consumes the existing API:
 
-https://whisprwords.vercel.app/api/
+https://whisprwords.com/api/
 
 The backend repository:
 https://github.com/TECHTUNE-I-T-SOLUTIONS/whispr.git
@@ -137,7 +137,7 @@ No generic Material default.
 ## 🔌 API Integration
 
 Base URL:
-https://whisprwords.vercel.app/api/
+https://whisprwords.com/api/
 
 Create structured services:
 - AuthService

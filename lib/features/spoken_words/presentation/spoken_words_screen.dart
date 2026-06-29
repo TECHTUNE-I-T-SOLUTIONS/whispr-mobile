@@ -168,7 +168,7 @@ class _SpokenWordsScreenState extends ConsumerState<SpokenWordsScreen>
   }
 
   Future<void> _shareSpokenWord(SpokenWord word) async {
-    final String baseUrl = 'https://whisprwords.vercel.app';
+    final String baseUrl = 'https://whisprwords.com';
     final url = '$baseUrl/spoken-words/${word.id}';
 
     await Share.share(

@@ -699,19 +699,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
           _buildLegalItem(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy Policy',
-            onTap: () => _launchUrl('https://whisprwords.vercel.app/privacy'),
+            onTap: () => _launchUrl('https://whisprwords.com/privacy'),
           ),
           _buildDivider(),
           _buildLegalItem(
             icon: Icons.description_outlined,
             title: 'Terms of Service',
-            onTap: () => _launchUrl('https://whisprwords.vercel.app/terms'),
+            onTap: () => _launchUrl('https://whisprwords.com/terms'),
           ),
           _buildDivider(),
           _buildLegalItem(
             icon: Icons.info_outline,
             title: 'About Whispr',
-            onTap: () => _launchUrl('https://whisprwords.vercel.app/about'),
+            onTap: () => _launchUrl('https://whisprwords.com/about'),
           ),
           _buildDivider(),
           _buildLegalItem(
@@ -863,7 +863,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
               ),
             ),
             child: Text(
-              'Version 1.0.0',
+              'Version 1.1.4',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -891,13 +891,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
               _buildSocialButton(
                 icon: Icons.language,
                 label: 'Website',
-                onTap: () => _launchUrl('https://whisprwords.vercel.app'),
+                onTap: () => _launchUrl('https://whisprwords.com'),
               ),
               const SizedBox(width: 16),
               _buildSocialButton(
                 icon: Icons.mail_outline,
                 label: 'Contact',
-                onTap: () => _launchUrl('mailto:support@whispr.com'),
+                onTap: () => _launchUrl('mailto:whisprwords@gmail.com'),
               ),
             ],
           ),
