@@ -25,7 +25,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final PageController _pageController = PageController();
-  final CarouselController _carouselController = CarouselController();
+  final CarouselSliderController _carouselController = CarouselSliderController();
   int _tabIndex = 0;
   int _currentCarouselIndex = 0;
   List<Post> _adminPosts = [];
@@ -41,7 +41,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void dispose() {
     _pageController.dispose();
-    _carouselController.dispose();
     super.dispose();
   }
 
