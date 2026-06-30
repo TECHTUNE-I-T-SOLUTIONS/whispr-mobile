@@ -36,11 +36,11 @@
                 <!-- Web URLs -->
                 <data
                     android:scheme="https"
-                    android:host="whisprwords.vercel.app"
+                    android:host="whisprwords.com"
                     android:pathPrefix="/chronicles" />
                 <data
                     android:scheme="https"
-                    android:host="whisprwords.vercel.app"
+                    android:host="whisprwords.com"
                     android:pathPrefix="/post" />
             </intent-filter>
             <!-- Custom scheme deep linking -->

@@ -40,6 +40,47 @@ import '../utils/auth_guard.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
+  redirect: (context, state) async {
+    final location = state.matchedLocation;
+
+    // If the location is exactly '/', redirect to splash
+    if (location == '/') {
+      return '/splash';
+    }
+
+    final isLoggedIn = await AuthGuard.isLoggedIn();
+    final isAuthRoute = location.startsWith('/login') ||
+                        location.startsWith('/signup') ||
+                        location == '/splash' ||
+                        location == '/onboarding' ||
+                        location == '/forgot-password';
+
+    // Allow access to main browsing routes even when not logged in
+    final isPublicRoute = location == '/home' ||
+                          location == '/chronicles' ||
+                          location == '/whispr-wall' ||
+                          location == '/notifications' ||
+                          location == '/games' ||
+                          location == '/guides' ||
+                          location == '/stories' ||
+                          location.startsWith('/stories/') ||
+                          location.startsWith('/post/') ||
+                          location.startsWith('/chronicles/') ||
+                          location.startsWith('/creator/') ||
+                          location.startsWith('/portfolio/') ||
+                          location.startsWith('/guides/') ||
+                          location.startsWith('/games/');
+
+    if (!isLoggedIn && !isAuthRoute && !isPublicRoute) {
+      return '/login';
+    }
+
+    if (isLoggedIn && isAuthRoute && location != '/splash') {
+      return '/home';
+    }
+
+    return null;
+  },
   routes: [
     // Splash and Onboarding
     GoRoute(
@@ -49,6 +90,11 @@ final router = GoRouter(
     GoRoute(
       path: '/onboarding',
       builder: (context, state) => const OnboardingScreen(),
+    ),
+    // Root route - redirect to splash
+    GoRoute(
+      path: '/',
+      redirect: (context, state) => '/splash',
     ),
 
     // Auth routes
@@ -159,6 +205,10 @@ final router = GoRouter(
           builder: (context, state) => const StoriesScreen(),
         ),
         GoRoute(
+          path: '/stories/create',
+          builder: (context, state) => const CreateStoryScreen(),
+        ),
+        GoRoute(
           path: '/stories/:slug',
           builder: (context, state) {
             final slug = state.pathParameters['slug']!;
@@ -174,10 +224,6 @@ final router = GoRouter(
               },
             ),
           ],
-        ),
-        GoRoute(
-          path: '/stories/create',
-          builder: (context, state) => const CreateStoryScreen(),
         ),
         GoRoute(
           path: '/guides',
@@ -243,34 +289,4 @@ final router = GoRouter(
       },
     ),
   ],
-  redirect: (context, state) async {
-    final isLoggedIn = await AuthGuard.isLoggedIn();
-    final isAuthRoute = state.matchedLocation.startsWith('/login') ||
-                       state.matchedLocation.startsWith('/signup') ||
-                       state.matchedLocation == '/splash' ||
-                       state.matchedLocation == '/onboarding' ||
-                       state.matchedLocation == '/forgot-password';
-
-    // Allow access to main browsing routes even when not logged in
-    final isPublicRoute = state.matchedLocation == '/home' ||
-                         state.matchedLocation == '/chronicles' ||
-                         state.matchedLocation == '/whispr-wall' ||
-                         state.matchedLocation == '/notifications' ||
-                         state.matchedLocation == '/games' ||
-                         state.matchedLocation == '/guides' ||
-                         state.matchedLocation.startsWith('/post/') ||
-                         state.matchedLocation.startsWith('/chronicles/') ||
-                         state.matchedLocation.startsWith('/creator/') ||
-                         state.matchedLocation.startsWith('/portfolio/');
-
-    if (!isLoggedIn && !isAuthRoute && !isPublicRoute) {
-      return '/login';
-    }
-
-    if (isLoggedIn && isAuthRoute && state.matchedLocation != '/splash') {
-      return '/home';
-    }
-
-    return null;
-  },
 );

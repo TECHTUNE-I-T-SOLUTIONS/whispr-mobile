@@ -107,7 +107,7 @@ SHARE_BASE_URL=https://whisprwords.com     # Web domain for shares
 ### Recipient Opens the Link:
 
 #### On Mobile with App Installed:
-1. Click link → `whisprwords.vercel.app/api/deeplink`
+1. Click link → `whisprwords.com/api/deeplink`
 2. Backend detects: Android/iOS
 3. Returns HTML page that tries: `whispr://app/chronicles/{id}`
 4. Android/iOS OS intercepts and opens app ✅
@@ -115,17 +115,17 @@ SHARE_BASE_URL=https://whisprwords.com     # Web domain for shares
 6. Falls back to web after 2 seconds if app doesn't respond
 
 #### On Mobile without App Installed:
-1. Click link → `whisprwords.vercel.app/api/deeplink`
+1. Click link → `whisprwords.com/api/deeplink`
 2. Backend detects: Mobile (Android/iOS)
 3. Returns HTML with fallback after 2 seconds
 4. Deep link fails to open (no app handler)
-5. Auto-redirects to web version: `whisprwords.vercel.app/chronicles/{id}`
+5. Auto-redirects to web version: `whisprwords.com/chronicles/{id}`
 6. User sees chronicle in browser ✅
 
 #### On Desktop:
-1. Click link → `whisprwords.vercel.app/api/deeplink`
+1. Click link → `whisprwords.com/api/deeplink`
 2. Backend detects: Desktop (not mobile)
-3. Directly redirects to web: `whisprwords.vercel.app/chronicles/{id}`
+3. Directly redirects to web: `whisprwords.com/chronicles/{id}`
 4. User sees chronicle on web ✅
 
 ## Installation & Build Instructions

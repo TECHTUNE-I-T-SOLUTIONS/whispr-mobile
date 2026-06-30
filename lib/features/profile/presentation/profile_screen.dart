@@ -671,6 +671,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
           ),
           _buildDivider(),
           _buildFeatureItem(
+            icon: Icons.auto_stories_outlined,
+            title: 'Stories',
+            subtitle: 'Read and create stories',
+            onTap: () => context.go('/stories'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
             icon: Icons.menu_book_outlined,
             title: 'Guides & Tutorials',
             subtitle: 'Learn poetry, blogging and more',
@@ -863,7 +870,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
               ),
             ),
             child: Text(
-              'Version 1.1.4',
+              'Version 1.1.5',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
