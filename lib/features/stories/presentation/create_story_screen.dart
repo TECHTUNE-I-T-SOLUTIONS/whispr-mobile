@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/auth_state.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
   return StoriesService(Supabase.instance.client);
@@ -74,8 +75,21 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
     });
 
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
+      final authState = ref.read(authStateProvider);
+      final appUser = authState.user;
+      
+      // Use the app's auth state first, fall back to Supabase
+      String? userId;
+      if (authState.isAuthenticated && appUser != null) {
+        userId = appUser.id;
+      } else {
+        final supabaseUser = Supabase.instance.client.auth.currentUser;
+        if (supabaseUser != null) {
+          userId = supabaseUser.id;
+        }
+      }
+
+      if (userId == null) {
         setState(() {
           _isLoadingCreator = false;
           _errorMessage = 'Please log in to create stories';
@@ -87,7 +101,7 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
       final creatorResponse = await Supabase.instance.client
           .from('chronicles_creators')
           .select('id, pen_name, bio, profile_image_url')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .maybeSingle();
 
       if (creatorResponse == null) {

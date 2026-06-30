@@ -26,9 +26,24 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
   @override
   void initState() { super.initState(); _load(); }
 
-  Future<void> _load() async {
-    final data = await ref.read(_portfolioServiceProvider).getPortfolioByPenName(widget.penName);
-    setState(() { _data = data; _loading = false; });
+  Future<void> _load({bool forceRefresh = false}) async {
+    setState(() => _loading = true);
+    try {
+      final data = await ref.read(_portfolioServiceProvider).getPortfolioByPenName(
+        widget.penName,
+        forceRefresh: forceRefresh,
+      );
+      if (mounted) {
+        setState(() { _data = data; _loading = false; });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading portfolio: $e')),
+        );
+      }
+    }
   }
 
   void _sharePortfolio() {
@@ -73,7 +88,7 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () { setState(() => _loading = true); _load(); },
+            onPressed: () => _load(forceRefresh: true),
           ),
         ],
       ),

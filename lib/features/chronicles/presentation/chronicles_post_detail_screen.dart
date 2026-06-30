@@ -15,8 +15,9 @@ final _chroniclesServiceProvider = Provider((ref) => ChroniclesService(ApiServic
 
 class ChroniclesPostDetailScreen extends ConsumerStatefulWidget {
   final String postId;
+  final bool isSlug; // Whether postId is actually a slug
 
-  const ChroniclesPostDetailScreen({super.key, required this.postId});
+  const ChroniclesPostDetailScreen({super.key, required this.postId, this.isSlug = false});
 
   @override
   ConsumerState<ChroniclesPostDetailScreen> createState() => _ChroniclesPostDetailScreenState();
@@ -50,7 +51,7 @@ class _ChroniclesPostDetailScreenState extends ConsumerState<ChroniclesPostDetai
   Future<void> _fetchChronicleDetails() async {
     try {
       setState(() => _isLoading = true);
-      final postData = await ref.read(_chroniclesServiceProvider).getPost(widget.postId);
+      final postData = await ref.read(_chroniclesServiceProvider).getPost(widget.postId, isSlug: widget.isSlug);
       _post = Post.fromJson(postData);
       final apiService = ref.read(apiServiceProvider);
 

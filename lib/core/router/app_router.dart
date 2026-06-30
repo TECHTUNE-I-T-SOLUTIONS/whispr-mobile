@@ -257,12 +257,15 @@ final router = GoRouter(
             return PostDetailScreen(postId: id);
           },
         ),
-        // Chronicles post details - supports both deep link formats
+        // Chronicles post details - supports both deep link formats (slug or id)
         GoRoute(
           path: '/chronicles/:id',
           builder: (context, state) {
             final id = state.pathParameters['id']!;
-            return ChroniclesPostDetailScreen(postId: id);
+            // Detect if it's a slug (contains non-numeric characters) or UUID
+            final isSlug = !RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$').hasMatch(id) &&
+                          !RegExp(r'^\d+$').hasMatch(id);
+            return ChroniclesPostDetailScreen(postId: id, isSlug: isSlug);
           },
         ),
       ],

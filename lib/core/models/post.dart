@@ -18,6 +18,7 @@ class Post {
   final String? publishedAt;
   final PostAuthor author;
   final String? userReaction; // User's reaction to this post ('like', null)
+  final String? slug; // Slug for chronicles posts
 
   Post({
     required this.id,
@@ -38,6 +39,7 @@ class Post {
     this.publishedAt,
     required this.author,
     this.userReaction,
+    this.slug,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -51,15 +53,16 @@ class Post {
       featured: json['featured'],
       readingTime: json['readingTime'],
       tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
-      coverImage: json['coverImage'] ?? json['coverImageUrl'],
-      viewCount: json['viewCount'] ?? json['viewsCount'],
-      likesCount: json['likesCount'],
-      commentsCount: json['commentsCount'],
-      sharesCount: json['sharesCount'],
-      createdAt: json['createdAt'],
-      publishedAt: json['publishedAt'],
+      coverImage: json['coverImage'] ?? json['coverImageUrl'] ?? json['cover_image_url'],
+      viewCount: json['viewCount'] ?? json['viewsCount'] ?? json['views_count'],
+      likesCount: json['likesCount'] ?? json['likes_count'],
+      commentsCount: json['commentsCount'] ?? json['comments_count'],
+      sharesCount: json['sharesCount'] ?? json['shares_count'],
+      createdAt: json['createdAt'] ?? json['created_at'],
+      publishedAt: json['publishedAt'] ?? json['published_at'],
       author: PostAuthor.fromJson(json['authors'] ?? json['author'] ?? {}),
       userReaction: json['userReaction'],
+      slug: json['slug'],
     );
   }
 
@@ -82,6 +85,7 @@ class Post {
     String? publishedAt,
     PostAuthor? author,
     String? userReaction,
+    String? slug,
   }) {
     return Post(
       id: id ?? this.id,
@@ -102,6 +106,7 @@ class Post {
       publishedAt: publishedAt ?? this.publishedAt,
       author: author ?? this.author,
       userReaction: userReaction ?? this.userReaction,
+      slug: slug ?? this.slug,
     );
   }
 

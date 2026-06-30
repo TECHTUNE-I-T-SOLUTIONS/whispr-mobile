@@ -56,29 +56,66 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
     try {
       setState(() => _isLoading = true);
       final apiService = ref.read(apiServiceProvider);
+      
+      // Fetch wall posts with their comments (wall_comments table)
       final response = await apiService.get('/wall');
+      
       if (response['success'] == true) {
-        final posts = (response['posts'] as List).map((json) => WallPost.fromJson(json)).toList();
-        if (_mounted) {
-          // Also fetch all responses for each post
-          for (int i = 0; i < posts.length; i++) {
-            try {
-              final responsesResponse = await apiService.get('/wall/${posts[i].id}/responses');
-              if (responsesResponse['success'] == true && responsesResponse['responses'] != null) {
-                final responses = (responsesResponse['responses'] as List)
-                    .map((r) => WallResponse.fromJson(r)).toList();
-                posts[i] = WallPost(
-                  id: posts[i].id,
-                  content: posts[i].content,
-                  responses: responses,
-                  createdAt: posts[i].createdAt,
-                );
-              }
-            } catch (e) {
-              debugPrint('Could not load responses for post ${posts[i].id}: $e');
-            }
+        List<dynamic> rawPosts = response['posts'] as List? ?? [];
+        
+        // Process each post - map admin_response to responses format
+        final posts = rawPosts.map((json) {
+          final map = json is Map<String, dynamic> ? json : Map<String, dynamic>.from(json);
+          
+          // Build responses from wall_comments if available
+          List<dynamic> commentsList = map['comments'] as List? ?? map['wall_comments'] as List? ?? [];
+          List<WallResponse> responses = [];
+          
+          // Also check for admin_response field
+          final adminResponse = map['admin_response'];
+          final adminResponseUpdated = map['admin_response_updated_at'];
+          
+          if (adminResponse != null && (adminResponse as String).isNotEmpty) {
+            responses.add(WallResponse(
+              id: 'admin_${map['id']}',
+              content: adminResponse,
+              createdAt: adminResponseUpdated ?? map['created_at'],
+              isAdmin: true,
+              author: WallResponseAuthor(
+                id: 'admin',
+                username: 'admin',
+                fullName: 'Whispr Admin',
+                avatarUrl: null,
+              ),
+            ));
           }
           
+          // Add other comments/responses from wall_comments
+          for (final comment in commentsList) {
+            final c = comment is Map<String, dynamic> ? comment : Map<String, dynamic>.from(comment);
+            responses.add(WallResponse(
+              id: c['id'] ?? '',
+              content: c['content'] ?? '',
+              createdAt: c['created_at'],
+              isAdmin: c['is_admin'] == true || c['admin_response'] != null,
+              author: WallResponseAuthor(
+                id: c['user_id'] ?? c['id'] ?? '',
+                username: c['pen_name'] ?? c['username'],
+                fullName: c['name'] ?? c['pen_name'] ?? 'User',
+                avatarUrl: c['avatar_url'],
+              ),
+            ));
+          }
+
+          return WallPost(
+            id: map['id'] ?? '',
+            content: map['content'] ?? map['question'] ?? '',
+            responses: responses.isNotEmpty ? responses : null,
+            createdAt: map['created_at'],
+          );
+        }).toList();
+
+        if (_mounted) {
           setState(() {
             _posts = posts;
             _isLoading = false;
@@ -88,6 +125,7 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
         throw Exception(response['error'] ?? 'Failed to load wall posts');
       }
     } catch (e) {
+      debugPrint('Error fetching wall posts: $e');
       if (_mounted) {
         setState(() {
           _error = 'Network error. Please check your connection.';

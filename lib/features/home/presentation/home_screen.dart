@@ -185,7 +185,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _pill('Admin', Icons.edit_note_outlined),
+                  _pill('General', Icons.edit_note_outlined),
                   _pill('Chronicles', Icons.auto_stories_outlined),
                   _pill('Chains', Icons.link_outlined),
                   _pill('Games', Icons.sports_esports_outlined),
@@ -361,7 +361,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _tabBar() {
-    final labels = ['Discover', 'Admin Posts', 'Chronicles', 'Games'];
+    final labels = ['Discover', 'General Posts', 'Chronicles', 'Games'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: SingleChildScrollView(
@@ -408,7 +408,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        _sectionHeader(context, 'Admin highlights', 'Fresh poems and blogs from the admin team'),
+        _sectionHeader(context, 'General highlights', 'Fresh poems and blogs from whispr'),
         _horizontalPosts(context, _adminPosts.take(5).toList()),
         _sectionHeader(context, 'Creator chronicles', 'Stories and writing from the community'),
         _horizontalPosts(context, _chroniclePosts.take(5).toList()),
@@ -424,9 +424,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       children: [
-        _sectionHeader(context, 'Admin poems', 'Curated poetic posts from the admin team'),
+        _sectionHeader(context, 'General poems', 'Curated poetic posts from whispr'),
         ...poems.take(4).map((post) => _feedCard(context, post)),
-        _sectionHeader(context, 'Admin blogs', 'Curated blog posts from the admin team'),
+        _sectionHeader(context, 'General blogs', 'Curated blog posts from whispr'),
         ...blogs.take(4).map((post) => _feedCard(context, post)),
       ],
     );
@@ -932,6 +932,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _openPost(BuildContext context, Post post) {
     final isChronicle = post.source == 'creator' || post.source == 'user';
-    context.go(isChronicle ? '/chronicles/${post.id}' : '/post/${post.id}');
+    if (isChronicle) {
+      // Use slug if available, otherwise use id
+      final identifier = post.slug ?? post.id;
+      context.go('/chronicles/$identifier');
+    } else {
+      context.go('/post/${post.id}');
+    }
   }
 }

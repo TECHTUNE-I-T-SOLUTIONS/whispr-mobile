@@ -35,7 +35,13 @@ class ChroniclesService {
     return posts;
   }
 
-  Future<Map<String, dynamic>> getPost(String id) async {
+  Future<Map<String, dynamic>> getPost(String id, {bool isSlug = false}) async {
+    if (isSlug) {
+      // Use slug endpoint
+      final response = await _apiService.get('/chronicles/by-slug/$id');
+      return Map<String, dynamic>.from(response['data'] ?? response);
+    }
+    // Use ID endpoint
     final response = await _apiService.get('/chronicles/posts/$id');
     return Map<String, dynamic>.from(response['data'] ?? response);
   }

@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/models/comment.dart';
 import '../../core/models/post.dart';
 import '../../core/network/api_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/auth/auth_state.dart';
+import '../../core/services/feed_service.dart';
+import '../../core/services/content_cache_service.dart';
+
+final _feedServiceProvider = Provider((ref) => FeedService(ApiService.instance, ContentCacheService()));
 
 class PostDetailScreen extends ConsumerStatefulWidget {
   final String postId;
@@ -27,6 +33,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   bool _isSubmittingComment = false;
   bool _hasLiked = false;
   int _likesCount = 0;
+  List<Post> _suggestedPosts = [];
 
   @override
   void initState() {
@@ -50,21 +57,19 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       // Fetch comments (if endpoint exists)
       try {
         final commentsResponse = await apiService.get('/comments?post_id=${widget.postId}');
-        final commentsData = commentsResponse['comments'] as List;
+        final commentsData = commentsResponse['comments'] as List? ?? [];
         _comments.clear();
         _comments.addAll(commentsData.map((json) => Comment.fromJson(json)).toList());
       } catch (e) {
-        // Comments endpoint might not exist, continue without them
         debugPrint('Could not fetch comments: $e');
       }
 
       // Fetch reactions
       try {
         final reactionsResponse = await apiService.get('/reactions?post_id=${widget.postId}');
-        final reactions = reactionsResponse['reactions'] as List;
+        final reactions = reactionsResponse['reactions'] as List? ?? [];
         final userReaction = reactionsResponse['userReaction'];
 
-        // Find like count and user's like status
         _likesCount = 0;
         _hasLiked = false;
         for (var reaction in reactions) {
@@ -74,9 +79,22 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         }
         _hasLiked = userReaction == 'like';
       } catch (e) {
-        // Reactions endpoint might not exist, use counts from post object
         _likesCount = _post?.likesCount ?? 0;
         debugPrint('Could not fetch reactions: $e');
+      }
+
+      // Fetch suggested posts
+      try {
+        final feedService = ref.read(_feedServiceProvider);
+        final feed = await feedService.getFeed(forceRefresh: false);
+        final suggestions = feed
+            .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
+            .where((p) => p.id != widget.postId)
+            .take(5)
+            .toList();
+        _suggestedPosts = suggestions;
+      } catch (e) {
+        debugPrint('Could not fetch suggestions: $e');
       }
 
       setState(() => _isLoading = false);
@@ -85,6 +103,84 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  void _showLinkOptions(String url) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Link Options',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.open_in_new),
+                title: const Text('Open in Browser'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _launchUrl(url);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('Copy Link'),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: url));
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link copied to clipboard!')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share),
+                title: const Text('Share Link'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Clipboard.setData(ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link copied! You can share it now.')),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open link: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -104,36 +200,19 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         'reaction_type': 'like',
       });
 
-      // Update local state based on the action
       if (response['action'] == 'added') {
-        setState(() {
-          _hasLiked = true;
-          _likesCount++;
-        });
+        setState(() { _hasLiked = true; _likesCount++; });
       } else if (response['action'] == 'removed') {
-        setState(() {
-          _hasLiked = false;
-          _likesCount = (_likesCount > 0) ? _likesCount - 1 : 0;
-        });
-      } else if (response['action'] == 'updated') {
-        // If updating from another reaction type to like
-        setState(() {
-          _hasLiked = true;
-          // Note: count might not change if replacing another reaction
-        });
+        setState(() { _hasLiked = false; _likesCount = (_likesCount > 0) ? _likesCount - 1 : 0; });
       }
 
       if (mounted) {
         final message = _hasLiked ? 'Post liked!' : 'Like removed!';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update like: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update like: $e')));
       }
     }
   }
@@ -160,23 +239,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
       if (response['comment'] != null) {
         _commentController.clear();
-        await _fetchPostDetails(); // Refresh comments
+        await _fetchPostDetails();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Comment posted!')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment posted!')));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to post comment: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to post comment: $e')));
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSubmittingComment = false);
-      }
+      if (mounted) setState(() => _isSubmittingComment = false);
     }
   }
 
@@ -194,7 +267,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // TODO: Navigate to login screen
+              context.go('/login');
             },
             child: const Text('Login'),
           ),
@@ -224,10 +297,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     children: [
                       Text(_error!),
                       const SizedBox(height: AppTheme.spacingM),
-                      ElevatedButton(
-                        onPressed: _fetchPostDetails,
-                        child: const Text('Retry'),
-                      ),
+                      ElevatedButton(onPressed: _fetchPostDetails, child: const Text('Retry')),
                     ],
                   ),
                 )
@@ -258,9 +328,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   const SizedBox(height: AppTheme.spacingM),
                                   Text(
                                     _post!.title,
-                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                                   ),
                                   if (_post!.excerpt != null) ...[
                                     const SizedBox(height: AppTheme.spacingS),
@@ -280,34 +348,72 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                           margin: Margins.only(bottom: 16),
                                           lineHeight: LineHeight.number(1.6),
                                         ),
-                                        "i": Style(
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                        "strong": Style(
+                                        "h1": Style(
+                                          fontSize: FontSize(24),
                                           fontWeight: FontWeight.bold,
+                                          margin: Margins.only(top: 16, bottom: 8),
                                         ),
+                                        "h2": Style(
+                                          fontSize: FontSize(20),
+                                          fontWeight: FontWeight.bold,
+                                          margin: Margins.only(top: 14, bottom: 8),
+                                        ),
+                                        "h3": Style(
+                                          fontSize: FontSize(18),
+                                          fontWeight: FontWeight.bold,
+                                          margin: Margins.only(top: 12, bottom: 6),
+                                        ),
+                                        "a": Style(
+                                          color: AppTheme.primaryColor,
+                                          textDecoration: TextDecoration.underline,
+                                        ),
+                                        "i": Style(fontStyle: FontStyle.italic),
+                                        "strong": Style(fontWeight: FontWeight.bold),
+                                        "img": Style(
+                                          width: Width(MediaQuery.of(context).size.width - 64),
+                                          margin: Margins.only(top: 12, bottom: 12),
+                                        ),
+                                        "blockquote": Style(
+                                          border: Border(left: BorderSide(color: AppTheme.primaryColor, width: 3)),
+                                          margin: Margins.only(left: 8, top: 8, bottom: 8),
+                                          padding: Padding(left: 12, top: 8, bottom: 8, right: 8),
+                                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.05),
+                                        ),
+                                        "ul": Style(
+                                          margin: Margins.only(bottom: 8),
+                                        ),
+                                        "li": Style(
+                                          margin: Margins.only(bottom: 4),
+                                        ),
+                                        "button": Style(
+                                          padding: HtmlPaddings.symmetric(horizontal: 16, vertical: 8),
+                                          backgroundColor: AppTheme.primaryColor,
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                                        ),
+                                      },
+                                      onLinkTap: (url, context, attributes, element) {
+                                        if (url != null) {
+                                          _showLinkOptions(url);
+                                        }
                                       },
                                     )
                                   else
                                     const Text('No content available'),
                                   const SizedBox(height: AppTheme.spacingM),
+                                  // Engagement bar
                                   Row(
                                     children: [
                                       IconButton(
                                         icon: Icon(
                                           _hasLiked ? Icons.favorite : Icons.favorite_border,
-                                          color: _hasLiked
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Theme.of(context).textTheme.bodySmall?.color,
+                                          color: _hasLiked ? Colors.red : Theme.of(context).textTheme.bodySmall?.color,
                                         ),
                                         onPressed: _likePost,
                                       ),
                                       Text('$_likesCount'),
                                       const SizedBox(width: AppTheme.spacingM),
-                                      Icon(
-                                        Icons.comment,
-                                        color: Theme.of(context).textTheme.bodySmall?.color,
-                                      ),
+                                      Icon(Icons.comment, color: Theme.of(context).textTheme.bodySmall?.color),
                                       const SizedBox(width: AppTheme.spacingXS),
                                       Text('${_post!.commentsCount ?? 0}'),
                                     ],
@@ -316,15 +422,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                               ),
                             ),
                           ),
-
                           const SizedBox(height: AppTheme.spacingL),
 
                           // Comments section
                           Text(
                             'Comments (${_comments.length})',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: AppTheme.spacingM),
 
@@ -348,11 +451,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                     child: ElevatedButton(
                                       onPressed: _isSubmittingComment ? null : _submitComment,
                                       child: _isSubmittingComment
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            )
+                                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                                           : const Text('Post Comment'),
                                     ),
                                   ),
@@ -360,7 +459,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                               ),
                             ),
                           ),
-
                           const SizedBox(height: AppTheme.spacingM),
 
                           // Comments list
@@ -378,17 +476,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                             backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                             child: Text(
                                               comment.authorName.substring(0, 1).toUpperCase(),
-                                              style: TextStyle(
-                                                color: Theme.of(context).colorScheme.primary,
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                              style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
                                             ),
                                           ),
                                           const SizedBox(width: AppTheme.spacingS),
-                                          Text(
-                                            comment.authorName,
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
-                                          ),
+                                          Text(comment.authorName, style: const TextStyle(fontWeight: FontWeight.bold)),
                                           const Spacer(),
                                           Text(
                                             _formatDate(DateTime.parse(comment.createdAt ?? DateTime.now().toIso8601String())),
@@ -402,6 +494,56 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   ),
                                 ),
                               )),
+
+                          // Suggestions section
+                          if (_suggestedPosts.isNotEmpty) ...[
+                            const SizedBox(height: AppTheme.spacingXL),
+                            const Divider(),
+                            const SizedBox(height: AppTheme.spacingM),
+                            Text(
+                              'You might also like',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: AppTheme.spacingM),
+                            ..._suggestedPosts.map((suggestion) => Card(
+                                  margin: const EdgeInsets.only(bottom: AppTheme.spacingS),
+                                  child: ListTile(
+                                    leading: suggestion.coverImage != null
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              suggestion.coverImage!,
+                                              width: 50,
+                                              height: 50,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, st) => Container(
+                                                width: 50, height: 50,
+                                                color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                                child: Icon(Icons.article, color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                                              ),
+                                            ),
+                                          )
+                                        : Container(
+                                            width: 50, height: 50,
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Icon(Icons.article, color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                                          ),
+                                    title: Text(suggestion.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    subtitle: Text(suggestion.type.toUpperCase(), style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color)),
+                                    trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                                    onTap: () {
+                                      if (suggestion.source == 'creator' || suggestion.source == 'user') {
+                                        context.push('/chronicles/${suggestion.slug ?? suggestion.id}');
+                                      } else {
+                                        context.push('/post/${suggestion.id}');
+                                      }
+                                    },
+                                  ),
+                                )),
+                          ],
                         ],
                       ),
                     ),
@@ -411,15 +553,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
+    if (difference.inDays > 0) return '${difference.inDays}d ago';
+    if (difference.inHours > 0) return '${difference.inHours}h ago';
+    if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
+    return 'Just now';
   }
 }
