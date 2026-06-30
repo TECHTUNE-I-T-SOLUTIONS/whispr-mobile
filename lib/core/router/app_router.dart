@@ -143,8 +143,7 @@ final router = GoRouter(
           path: '/chains/:chainId',
           builder: (context, state) {
             final chainId = state.pathParameters['chainId']!;
-            final chainTitle = state.uri.queryParameters['title'];
-            return ChainEntriesScreen(chainId: chainId, chainTitle: chainTitle);
+            return ChainEntriesScreen(chainId: chainId);
           },
         ),
         GoRoute(
