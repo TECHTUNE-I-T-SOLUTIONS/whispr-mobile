@@ -7,6 +7,10 @@ import '../../../core/services/stories_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_state.dart';
 
+final storiesServiceProvider = Provider<StoriesService>((ref) {
+  return StoriesService(Supabase.instance.client);
+});
+
 class ManageChaptersScreen extends ConsumerStatefulWidget {
   final String storyId;
   final String storyTitle;

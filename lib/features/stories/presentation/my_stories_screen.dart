@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_state.dart';
+
+final storiesServiceProvider = Provider<StoriesService>((ref) {
+  return StoriesService(Supabase.instance.client);
+});
 
 class MyStoriesScreen extends ConsumerStatefulWidget {
   const MyStoriesScreen({super.key});
@@ -253,7 +258,7 @@ class _MyStoriesScreenState extends ConsumerState<MyStoriesScreen> {
                                         tooltip: 'Edit Story',
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.chrome_reader, size: 20),
+                                        icon: const Icon(Icons.menu_book, size: 20),
                                         onPressed: () {
                                           // Navigate to manage chapters
                                           context.push('/stories/${story['slug']}/chapters');
