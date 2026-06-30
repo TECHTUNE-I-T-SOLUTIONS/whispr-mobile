@@ -376,7 +376,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                         "blockquote": Style(
                                           border: const Border(left: BorderSide(color: AppTheme.primaryColor, width: 3)),
                                           margin: Margins.only(left: 8, top: 8, bottom: 8),
-                                          padding: const HtmlPaddings(left: 12, top: 8, bottom: 8, right: 8),
                                           backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.05),
                                         ),
                                         "ul": Style(
