@@ -694,6 +694,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Image.asset('assets/images/Whispr.png', fit: BoxFit.contain),
               ),
+            // Ensure content is visible in both light and dark modes
+            if (post.coverImage == null)
+              Container(
+                color: Theme.of(context).brightness == Brightness.light
+                    ? Colors.grey.shade200
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/Whispr.png',
+                    fit: BoxFit.contain,
+                    width: 80,
+                    height: 80,
+                  ),
+                ),
+              ),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

@@ -323,6 +323,21 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                         width: double.infinity,
                                         height: 200,
                                         fit: BoxFit.cover,
+                                        loadingBuilder: (context, child, progress) {
+                                          if (progress == null) return child;
+                                          return Container(
+                                            height: 200,
+                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            child: const Center(child: CircularProgressIndicator()),
+                                          );
+                                        },
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            height: 200,
+                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            child: Icon(Icons.image_not_supported, size: 48, color: Theme.of(context).colorScheme.primary),
+                                          );
+                                        },
                                       ),
                                     ),
                                   const SizedBox(height: AppTheme.spacingM),

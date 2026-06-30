@@ -140,6 +140,14 @@ final router = GoRouter(
           builder: (context, state) => const WritingChainsScreen(),
         ),
         GoRoute(
+          path: '/chains/:chainId',
+          builder: (context, state) {
+            final chainId = state.pathParameters['chainId']!;
+            final chainTitle = state.uri.queryParameters['title'];
+            return ChainEntriesScreen(chainId: chainId, chainTitle: chainTitle);
+          },
+        ),
+        GoRoute(
           path: '/writing-chains/create',
           builder: (context, state) => const CreateChainScreen(),
         ),

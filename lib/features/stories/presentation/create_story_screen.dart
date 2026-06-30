@@ -3,12 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/services/stories_service.dart';
+import '../../../core/network/api_service.dart';
+import '../../../core/services/content_cache_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_state.dart';
 
-final storiesServiceProvider = Provider<StoriesService>((ref) {
-  return StoriesService(Supabase.instance.client);
+final storiesServiceProvider = Provider((ref) {
+  return StoriesService(ApiService.instance, ContentCacheService());
 });
 
 class CreateStoryScreen extends ConsumerStatefulWidget {
@@ -97,25 +98,45 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
         return;
       }
 
-      // Get creator ID from user
-      final creatorResponse = await Supabase.instance.client
-          .from('chronicles_creators')
-          .select('id, pen_name, bio, profile_image_url')
-          .eq('user_id', userId)
-          .maybeSingle();
+      // Get creator ID from user via API
+      final apiService = ApiService.instance;
+      try {
+        final creatorData = await apiService.get('/chronicles/creator/profile');
+        final creator = creatorData['creator'] ?? creatorData;
+        
+        if (creator == null || creator['id'] == null) {
+          setState(() {
+            _isLoadingCreator = false;
+            _errorMessage = 'Creator profile not found. Please create a chronicles creator profile first.';
+          });
+          return;
+        }
 
-      if (creatorResponse == null) {
         setState(() {
+          _creatorId = creator['id'];
           _isLoadingCreator = false;
-          _errorMessage = 'Creator profile not found. Please create a chronicles creator profile first.';
         });
-        return;
-      }
+      } catch (e) {
+        // Fallback to direct Supabase query
+        final creatorResponse = await Supabase.instance.client
+            .from('chronicles_creators')
+            .select('id, pen_name, bio, profile_image_url')
+            .eq('user_id', userId)
+            .maybeSingle();
 
-      setState(() {
-        _creatorId = creatorResponse['id'];
-        _isLoadingCreator = false;
-      });
+        if (creatorResponse == null) {
+          setState(() {
+            _isLoadingCreator = false;
+            _errorMessage = 'Creator profile not found. Please create a chronicles creator profile first.';
+          });
+          return;
+        }
+
+        setState(() {
+          _creatorId = creatorResponse['id'];
+          _isLoadingCreator = false;
+        });
+      }
     } catch (e) {
       setState(() {
         _isLoadingCreator = false;

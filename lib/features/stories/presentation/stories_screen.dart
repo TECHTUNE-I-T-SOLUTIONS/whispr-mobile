@@ -50,6 +50,10 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/more'),
+        ),
         title: const Text('Stories'),
         backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
