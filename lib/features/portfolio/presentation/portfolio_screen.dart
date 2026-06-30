@@ -178,7 +178,9 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
                     : null,
                 child: creator['profile_image_url'] == null
                     ? Text(
-                        (creator['pen_name']?.[0] ?? 'W').toString().toUpperCase(),
+                        ((creator['pen_name'] as String?)?.isNotEmpty == true
+                            ? (creator['pen_name'] as String)[0]
+                            : 'W').toString().toUpperCase(),
                         style: const TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold),
                       )
                     : null,
