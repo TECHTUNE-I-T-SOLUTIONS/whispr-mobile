@@ -18,7 +18,7 @@ class EducationalGamesService {
           .eq('is_ai_powered', false)
           .order('title');
       
-      return List<Map<String, dynamic>>.from(response ?? []);
+      return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       // Return empty list on error
       return [];
@@ -35,7 +35,7 @@ class EducationalGamesService {
           .eq('is_published', true)
           .maybeSingle();
       
-      return response as Map<String, dynamic>?;
+      return response;
     } catch (e) {
       return null;
     }
@@ -54,7 +54,7 @@ class EducationalGamesService {
           .eq('is_active', true)
           .order('challenge_order');
       
-      return List<Map<String, dynamic>>.from(response ?? []);
+      return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       // Return empty list on error
       return [];
@@ -85,7 +85,7 @@ class EducationalGamesService {
         .select()
         .single();
 
-    return response as Map<String, dynamic>;
+    return response;
   }
 
   /// Get an active session for a game
@@ -106,7 +106,7 @@ class EducationalGamesService {
         .limit(1)
         .maybeSingle();
 
-    return response as Map<String, dynamic>?;
+    return response;
   }
 
   /// Submit an answer for a challenge (local evaluation for educational games)
@@ -122,8 +122,6 @@ class EducationalGamesService {
         .select('*')
         .eq('id', challengeId)
         .single();
-
-    if (challenge == null) throw Exception('Challenge not found');
 
     final isCorrect = answer == challenge['correct_answer'];
     final feedback = isCorrect 
@@ -152,8 +150,6 @@ class EducationalGamesService {
         .select('*')
         .eq('id', sessionId)
         .single();
-
-    if (session == null) throw Exception('Session not found');
 
     final newScore = (session['score'] ?? 0) + (isCorrect ? 10 : 0);
     final newStreak = isCorrect ? (session['streak_count'] ?? 0) + 1 : 0;
@@ -208,24 +204,22 @@ class EducationalGamesService {
         .eq('id', sessionId)
         .single();
 
-    if (session != null) {
-      final progress = await _supabase
-          .from('chronicles_creator_game_progress')
-          .select('*')
-          .eq('creator_id', creatorId)
-          .eq('game_id', session['game_id'])
-          .maybeSingle();
+    final progress = await _supabase
+        .from('chronicles_creator_game_progress')
+        .select('*')
+        .eq('creator_id', creatorId)
+        .eq('game_id', session['game_id'])
+        .maybeSingle();
 
-      if (progress != null) {
-        await _supabase
-            .from('chronicles_creator_game_progress')
-            .update({
-              'completed_sessions': (progress['completed_sessions'] ?? 0) + 1,
-              'last_played_at': DateTime.now().toIso8601String(),
-            })
-            .eq('creator_id', creatorId)
-            .eq('game_id', session['game_id']);
-      }
+    if (progress != null) {
+      await _supabase
+          .from('chronicles_creator_game_progress')
+          .update({
+            'completed_sessions': (progress['completed_sessions'] ?? 0) + 1,
+            'last_played_at': DateTime.now().toIso8601String(),
+          })
+          .eq('creator_id', creatorId)
+          .eq('game_id', session['game_id']);
     }
   }
 
@@ -241,7 +235,7 @@ class EducationalGamesService {
         .eq('game_id', gameId)
         .maybeSingle();
 
-    return response as Map<String, dynamic>?;
+    return response;
   }
 
   /// Update or create progress record
@@ -290,6 +284,6 @@ class EducationalGamesService {
         .select('*')
         .eq('creator_id', creatorId);
 
-    return List<Map<String, dynamic>>.from(response ?? []);
+    return List<Map<String, dynamic>>.from(response);
   }
 }

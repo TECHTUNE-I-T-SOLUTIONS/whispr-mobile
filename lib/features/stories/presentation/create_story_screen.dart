@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/api_service.dart';
 import '../../../core/services/stories_service.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_state.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
@@ -300,7 +299,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                       _buildSectionHeader('Genre *'),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: _selectedGenre,
                         decoration: InputDecoration(
                           hintText: 'Select genre',
                           border: OutlineInputBorder(
@@ -334,7 +332,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                       _buildSectionHeader('Status'),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: _selectedStatus,
                         decoration: InputDecoration(
                           hintText: 'Select status (default: draft)',
                           border: OutlineInputBorder(

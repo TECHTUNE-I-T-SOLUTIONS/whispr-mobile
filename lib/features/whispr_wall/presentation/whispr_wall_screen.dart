@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/post.dart';
 import '../../../core/network/api_service.dart';
@@ -183,11 +182,15 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
   }
 
   Future<void> _likeComment(String postId, String responseId, bool isCurrentlyLiked) async {
+    // ignore: use_build_context_synchronously
+    final messenger = ScaffoldMessenger.of(context);
     final authState = ref.read(authStateProvider);
     if (!authState.isAuthenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please log in to like comments')),
-      );
+      if (_mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Please log in to like comments')),
+        );
+      }
       return;
     }
 
@@ -222,7 +225,9 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
         _commentLikesCount[postId]![responseId] = currentLikes;
       });
       if (_mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        // ignore: use_build_context_synchronously
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
       }
@@ -230,6 +235,8 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
   }
 
   Future<void> _submitReply(String postId, String content) async {
+    // ignore: use_build_context_synchronously
+    final messenger = ScaffoldMessenger.of(context);
     if (content.trim().isEmpty) return;
 
     setState(() {
@@ -249,7 +256,7 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
       });
 
       if (_mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('Reply posted!')),
         );
         _replyControllers[postId]?.clear();
@@ -260,7 +267,7 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
       }
     } catch (e) {
       if (_mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(content: Text('Failed to reply: $e')),
         );
       }

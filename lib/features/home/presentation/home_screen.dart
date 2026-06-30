@@ -1,5 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/material.dart' hide CarouselController;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +10,6 @@ import '../../../core/services/chains_service.dart';
 import '../../../core/services/content_cache_service.dart';
 import '../../../core/services/chronicles_service.dart';
 import '../../../core/services/feed_service.dart';
-import '../../../core/theme/app_theme.dart';
 
 final _feedServiceProvider = Provider((ref) => FeedService(ApiService.instance, ContentCacheService()));
 final _chainsServiceProvider = Provider((ref) => ChainsService(ApiService.instance, ContentCacheService()));
@@ -440,17 +439,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _sectionHeader(context, 'Creator chronicles', 'Independent posts from chronicles creators'),
         ...chronicles.take(6).map((post) => _feedCard(context, post)),
         _sectionHeader(context, 'Writing chains', 'Browse collaborative stories'),
-        ..._chains.take(6).map((chain) => Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: GestureDetector(
-            onTap: () => context.go('/chains/${(chain as Map<String, dynamic>)['id']}'),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(24)),
-              child: Text((chain as Map<String, dynamic>)['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
+        ..._chains.take(6).map((chain) {
+          final chainMap = chain as Map<String, dynamic>;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: GestureDetector(
+              onTap: () => context.go('/chains/${chainMap['id']}'),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(24)),
+                child: Text(chainMap['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
             ),
-          ),
-        )),
+          );
+        }),
       ],
     );
   }

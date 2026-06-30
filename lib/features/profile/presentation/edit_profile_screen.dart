@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_service.dart';
 import '../../../features/auth/auth_state.dart';
 import '../../../core/models/chronicles.dart';
@@ -117,7 +116,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(authStateProvider).user;
 
     return Scaffold(
       appBar: AppBar(
@@ -231,7 +229,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
             // Content Type
             DropdownButtonFormField<PostType>(
-              value: _contentType,
+              initialValue: _contentType,
               decoration: InputDecoration(
                 labelText: 'Content Type',
                 border: OutlineInputBorder(

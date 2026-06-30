@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
-import '../../../core/theme/app_theme.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
   return StoriesService(Supabase.instance.client);
@@ -415,6 +414,8 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
               
               final user = Supabase.instance.client.auth.currentUser;
               final service = ref.read(storiesServiceProvider);
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
               
               try {
                 await service.addStoryComment(
@@ -425,16 +426,16 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
                   userId: user?.id,
                 );
                 if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  navigator.pop();
+                  messenger.showSnackBar(
                     const SnackBar(content: Text('Comment added')),
                   );
                   _loadStory();
                 }
               } catch (e) {
                 if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  navigator.pop();
+                  messenger.showSnackBar(
                     SnackBar(content: Text('Error: $e')),
                   );
                 }

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_state.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {

@@ -168,6 +168,15 @@ class Creator {
     String? lastActivityAt,
     String? createdAt,
     String? updatedAt,
+    int? totalFollowers,
+    int? totalBlogs,
+    int? totalPoems,
+    int? totalEngagement,
+    String? location,
+    String? website,
+    String? status,
+    List<String>? badges,
+    String? role,
   }) {
     return Creator(
       id: id ?? this.id,
@@ -190,6 +199,15 @@ class Creator {
       lastActivityAt: lastActivityAt ?? this.lastActivityAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      totalFollowers: totalFollowers ?? this.totalFollowers,
+      totalBlogs: totalBlogs ?? this.totalBlogs,
+      totalPoems: totalPoems ?? this.totalPoems,
+      totalEngagement: totalEngagement ?? this.totalEngagement,
+      location: location ?? this.location,
+      website: website ?? this.website,
+      status: status ?? this.status,
+      badges: badges ?? this.badges,
+      role: role ?? this.role,
     );
   }
 }

@@ -98,7 +98,7 @@ class StoriesService {
         .eq('slug', chapterSlug)
         .single();
 
-    if (chapter == null) return null;
+    // .single() throws if not found, so chapter is never null
 
     // Record view
     final storyTable = story['author_type'] == 'admin' ? 'admin_stories' : 'chronicles_stories';

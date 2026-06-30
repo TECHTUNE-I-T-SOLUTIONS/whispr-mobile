@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
-import '../../../core/theme/app_theme.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
   return StoriesService(Supabase.instance.client);
@@ -93,7 +92,7 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _genres.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final genre = _genres[index];
           final isSelected = _selectedGenre == genre;

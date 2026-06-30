@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/services/educational_games_service.dart';
-import '../../../core/services/games_progress_service.dart';
 
 class EducationalGamePlayScreen extends StatefulWidget {
   final Map<String, dynamic> game;
@@ -16,7 +15,6 @@ class EducationalGamePlayScreen extends StatefulWidget {
 
 class _EducationalGamePlayScreenState extends State<EducationalGamePlayScreen> {
   final _gameService = EducationalGamesService.instance;
-  final _progressService = GamesProgressService();
   
   List<Map<String, dynamic>> _challenges = [];
   int _currentChallengeIndex = 0;
@@ -27,11 +25,9 @@ class _EducationalGamePlayScreenState extends State<EducationalGamePlayScreen> {
   bool _isCorrect = false;
   bool _loading = true;
   bool _submitting = false;
-  String? _sessionId;
 
   String get _gameSlug => (widget.game['slug'] ?? '').toString();
   String get _gameTitle => (widget.game['title'] ?? 'Game').toString();
-  String get _gameDescription => (widget.game['description'] ?? '').toString();
 
   @override
   void initState() {

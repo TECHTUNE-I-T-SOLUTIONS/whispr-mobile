@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_service.dart';
 import '../../../features/auth/auth_state.dart';
-import '../../../core/models/chronicles.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
   const ProfileDetailsScreen({super.key});
@@ -265,7 +264,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
                 [
                   _buildDetailItem(
                     'Content Type',
-                    user.contentType == PostType.both ? 'Both' : user.contentType.name.toUpperCase(),
+                    user.contentType.name.toUpperCase(),
                   ),
                   if (user.categories.isNotEmpty)
                     _buildDetailItem('Categories', user.categories.join(', ')),

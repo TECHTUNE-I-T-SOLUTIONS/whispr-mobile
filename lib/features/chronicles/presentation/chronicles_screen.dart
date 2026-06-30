@@ -52,7 +52,7 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
   @override
   Widget build(BuildContext context) {
     final filtered = _tab == 'all'
-        ? [..._posts, ..._myPosts].toSet().toList() // Combine all posts, removing duplicates
+        ? {..._posts, ..._myPosts}.toList() // Combine all posts, removing duplicates
         : _tab == 'mine'
             ? _myPosts
             : _posts.where((p) => p.type == _tab).toList();
