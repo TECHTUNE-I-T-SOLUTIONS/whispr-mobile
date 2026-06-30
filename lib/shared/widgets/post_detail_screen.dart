@@ -424,7 +424,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                         "img": Style(
                                           width: Width(MediaQuery.of(context).size.width - 64),
                                           height: Height.auto(),
-                                          maxHeight: MaxHeight(300),
                                           margin: Margins.only(top: 12, bottom: 12),
                                         ),
                                         "blockquote": Style(
