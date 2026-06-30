@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/network/api_service.dart';
 import '../../../core/services/stories_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_state.dart';
@@ -98,8 +99,8 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
       }
 
       // Get creator ID from user via API
-      final apiService = ApiService.instance;
       try {
+        final apiService = ApiService.instance;
         final creatorData = await apiService.get('/chronicles/creator/profile');
         final creator = creatorData['creator'] ?? creatorData;
         
