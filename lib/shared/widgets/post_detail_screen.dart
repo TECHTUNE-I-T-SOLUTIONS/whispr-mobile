@@ -346,7 +346,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                       style: {
                                         "p": Style(
                                           margin: Margins.only(bottom: 16),
-                                          lineHeight: LineHeight.number(1.6),
+                                          lineHeight: const LineHeight(1.6),
                                         ),
                                         "h1": Style(
                                           fontSize: FontSize(24),
@@ -374,9 +374,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                           margin: Margins.only(top: 12, bottom: 12),
                                         ),
                                         "blockquote": Style(
-                                          border: Border(left: BorderSide(color: AppTheme.primaryColor, width: 3)),
+                                          border: const Border(left: BorderSide(color: AppTheme.primaryColor, width: 3)),
                                           margin: Margins.only(left: 8, top: 8, bottom: 8),
-                                          padding: Padding(left: 12, top: 8, bottom: 8, right: 8),
+                                          padding: const HtmlPaddings(left: 12, top: 8, bottom: 8, right: 8),
                                           backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.05),
                                         ),
                                         "ul": Style(
@@ -385,14 +385,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                         "li": Style(
                                           margin: Margins.only(bottom: 4),
                                         ),
-                                        "button": Style(
-                                          padding: HtmlPaddings.symmetric(horizontal: 16, vertical: 8),
-                                          backgroundColor: AppTheme.primaryColor,
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.all(Radius.circular(8)),
-                                        ),
                                       },
-                                      onLinkTap: (url, context, attributes, element) {
+                                      onLinkTap: (url, attributes, element) {
                                         if (url != null) {
                                           _showLinkOptions(url);
                                         }
