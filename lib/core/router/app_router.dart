@@ -29,6 +29,8 @@ import '../../features/games/presentation/educational_game_play_screen.dart';
 import '../../features/stories/presentation/stories_screen.dart';
 import '../../features/stories/presentation/story_detail_screen.dart';
 import '../../features/stories/presentation/create_story_screen.dart';
+import '../../features/stories/presentation/my_stories_screen.dart';
+import '../../features/stories/presentation/manage_chapters_screen.dart';
 import '../../features/profile/presentation/profile_details_screen.dart';
 import '../../features/profile/presentation/review_detail_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
@@ -216,6 +218,10 @@ final router = GoRouter(
           builder: (context, state) => const CreateStoryScreen(),
         ),
         GoRoute(
+          path: '/stories/my-stories',
+          builder: (context, state) => const MyStoriesScreen(),
+        ),
+        GoRoute(
           path: '/stories/:slug',
           builder: (context, state) {
             final slug = state.pathParameters['slug']!;
@@ -228,6 +234,14 @@ final router = GoRouter(
                 final slug = state.pathParameters['slug']!;
                 final chapterSlug = state.pathParameters['chapterSlug']!;
                 return StoryDetailScreen(storySlug: slug, chapterSlug: chapterSlug);
+              },
+            ),
+            GoRoute(
+              path: 'chapters',
+              builder: (context, state) {
+                final slug = state.pathParameters['slug']!;
+                final storyTitle = state.uri.queryParameters['title'] ?? 'Manage Chapters';
+                return ManageChaptersScreen(storyId: slug, storyTitle: storyTitle);
               },
             ),
           ],

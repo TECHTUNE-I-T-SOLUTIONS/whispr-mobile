@@ -62,6 +62,11 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
             icon: const Icon(Icons.add),
             onPressed: () => context.push('/stories/create'),
           ),
+          IconButton(
+            icon: const Icon(Icons.library_books),
+            onPressed: () => context.push('/stories/my-stories'),
+            tooltip: 'My Stories',
+          ),
         ],
       ),
       body: Column(

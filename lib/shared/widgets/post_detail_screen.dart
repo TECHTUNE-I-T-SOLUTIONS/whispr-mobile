@@ -4,6 +4,7 @@ import 'package:flutter_html/flutter_html.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/comment.dart';
 import '../../core/models/post.dart';
@@ -276,6 +277,36 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     );
   }
 
+  Future<void> _sharePost() async {
+    if (_post == null) return;
+    
+    try {
+      // Determine the deep link based on post type
+      String deepLink;
+      final baseUrl = 'https://whisprwords.com';
+      
+      if (_post!.source == 'creator' || _post!.source == 'user') {
+        // Chronicles post
+        final slug = _post!.slug ?? _post!.id;
+        deepLink = '$baseUrl/chronicles/$slug';
+      } else {
+        // Regular post
+        deepLink = '$baseUrl/post/${_post!.id}';
+      }
+      
+      await Share.share(
+        deepLink,
+        subject: _post!.title,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to share: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -287,6 +318,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         title: const Text('Post Details'),
         backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: _sharePost,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -315,7 +352,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (_post!.coverImage != null)
+                                    if (_post!.coverImage != null)
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(AppTheme.borderRadiusM),
                                       child: Image.network(
@@ -386,6 +423,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                         "strong": Style(fontWeight: FontWeight.bold),
                                         "img": Style(
                                           width: Width(MediaQuery.of(context).size.width - 64),
+                                          maxWidth: MaxWidth(MediaQuery.of(context).size.width - 64),
+                                          height: Height.auto(),
+                                          maxHeight: MaxHeight(300),
                                           margin: Margins.only(top: 12, bottom: 12),
                                         ),
                                         "blockquote": Style(

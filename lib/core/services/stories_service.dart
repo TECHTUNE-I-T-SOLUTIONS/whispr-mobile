@@ -390,4 +390,33 @@ class StoriesService {
 
     return List<Map<String, dynamic>>.from(response);
   }
+
+  // Get my stories (for current user)
+  Future<List<Map<String, dynamic>>> getMyStories() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+
+    // Get creator profile for current user
+    final creator = await _supabase
+        .from('chronicles_creators')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+
+    if (creator == null) {
+      throw Exception('Creator profile not found');
+    }
+
+    return getCreatorStories(creator['id']);
+  }
+
+  // Delete story
+  Future<void> deleteStory(String storyId) async {
+    await _supabase
+        .from('chronicles_stories')
+        .delete()
+        .eq('id', storyId);
+  }
 }
