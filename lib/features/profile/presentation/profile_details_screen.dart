@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_service.dart';
 import '../../../features/auth/auth_state.dart';
+import '../../../core/models/chronicles.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
   const ProfileDetailsScreen({super.key});
@@ -262,7 +263,10 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
               _buildDetailSection(
                 'Content & Interests',
                 [
-                  _buildDetailItem('Content Type', user.contentType.name.toUpperCase()),
+                  _buildDetailItem(
+                    'Content Type',
+                    user.contentType == PostType.both ? 'Both' : user.contentType.name.toUpperCase(),
+                  ),
                   if (user.categories.isNotEmpty)
                     _buildDetailItem('Categories', user.categories.join(', ')),
                 ],
@@ -275,8 +279,13 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
                 'Profile Statistics',
                 _loadingStats ? [_buildDetailItem('Loading', 'Please wait', Icons.hourglass_empty)] : [
                   _buildDetailItem('Total Posts', '${_stats?['postCount'] ?? user.postCount}', Icons.article_outlined),
-                  _buildDetailItem('Blog Posts', '${_stats?['totalBlogs'] ?? user.totalBlogs}', Icons.description),
-                  _buildDetailItem('Poems', '${_stats?['totalPoems'] ?? user.totalPoems}', Icons.auto_stories),
+                  if (user.role == 'admin') ...[
+                    _buildDetailItem('Blog Posts', '${_stats?['totalBlogs'] ?? user.totalBlogs}', Icons.description),
+                    _buildDetailItem('Poems', '${_stats?['totalPoems'] ?? user.totalPoems}', Icons.auto_stories),
+                  ] else ...[
+                    _buildDetailItem('Chronicles', '${_stats?['totalBlogs'] ?? user.totalBlogs}', Icons.book_outlined),
+                    _buildDetailItem('Writing Chains', '${_stats?['totalPoems'] ?? 0}', Icons.link),
+                  ],
                   _buildDetailItem('Total Followers', '${_stats?['totalFollowers'] ?? user.totalFollowers}', Icons.people_outline),
                   _buildDetailItem('Total Engagement', '${_stats?['totalEngagement'] ?? user.totalEngagement}', Icons.favorite),
                   _buildDetailItem('Current Streak', '${_stats?['currentStreak'] ?? user.currentStreak}', Icons.local_fire_department),
@@ -503,9 +512,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
                 child: ElevatedButton.icon(
                   onPressed: () {
                     // Navigate to edit profile
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Edit profile coming soon!')),
-                    );
+                    context.push('/edit-profile');
                   },
                   icon: const Icon(Icons.edit),
                   label: const Text('Edit Profile'),

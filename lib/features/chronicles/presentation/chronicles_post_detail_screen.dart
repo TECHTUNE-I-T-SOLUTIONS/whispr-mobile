@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_html/flutter_html.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -663,12 +664,38 @@ $shareUrl
                 ),
 
                 // Content
-                SelectableText(
-                  _post!.content ?? 'No content available',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    height: 1.7,
-                  ),
-                ),
+                if (_post!.content != null && _post!.content!.isNotEmpty)
+                  Html(
+                    data: _post!.content!,
+                    style: {
+                      "p": Style(
+                        margin: Margins.only(bottom: 16),
+                        lineHeight: const LineHeight(1.7),
+                      ),
+                      "h1": Style(
+                        fontSize: FontSize(24),
+                        fontWeight: FontWeight.bold,
+                        margin: Margins.only(top: 16, bottom: 8),
+                      ),
+                      "h2": Style(
+                        fontSize: FontSize(20),
+                        fontWeight: FontWeight.bold,
+                        margin: Margins.only(top: 14, bottom: 8),
+                      ),
+                      "h3": Style(
+                        fontSize: FontSize(18),
+                        fontWeight: FontWeight.bold,
+                        margin: Margins.only(top: 12, bottom: 6),
+                      ),
+                      "img": Style(
+                        width: Width(MediaQuery.of(context).size.width - 64),
+                        height: Height.auto(),
+                        margin: Margins.only(top: 12, bottom: 12),
+                      ),
+                    },
+                  )
+                else
+                  const Text('No content available'),
 
                 const SizedBox(height: AppTheme.spacingXXL),
 

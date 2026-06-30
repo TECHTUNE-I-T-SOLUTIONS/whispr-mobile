@@ -36,8 +36,18 @@ class _MyStoriesScreenState extends ConsumerState<MyStoriesScreen> {
     });
 
     try {
+      // Wait for auth to be ready
       final authState = ref.read(authStateProvider);
-      if (!authState.isAuthenticated || authState.user == null) {
+      
+      // Check if still loading
+      if (authState.isLoading) {
+        // Wait a bit for auth to initialize
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
+      // Re-read auth state after delay
+      final currentAuthState = ref.read(authStateProvider);
+      if (!currentAuthState.isLoggedIn || currentAuthState.user == null) {
         setState(() {
           _isLoading = false;
           _errorMessage = 'Please log in to view your stories';

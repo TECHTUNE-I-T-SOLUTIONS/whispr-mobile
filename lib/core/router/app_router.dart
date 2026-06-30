@@ -32,6 +32,7 @@ import '../../features/stories/presentation/create_story_screen.dart';
 import '../../features/stories/presentation/my_stories_screen.dart';
 import '../../features/stories/presentation/manage_chapters_screen.dart';
 import '../../features/profile/presentation/profile_details_screen.dart';
+import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/profile/presentation/review_detail_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
 import '../../features/spoken_words/presentation/spoken_words_screen.dart';
@@ -261,6 +262,10 @@ final router = GoRouter(
         GoRoute(
           path: '/profile-details',
           builder: (context, state) => const ProfileDetailsScreen(),
+        ),
+        GoRoute(
+          path: '/edit-profile',
+          builder: (context, state) => const EditProfileScreen(),
         ),
         GoRoute(
           path: '/reviews',
