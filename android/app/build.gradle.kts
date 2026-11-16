@@ -1,3 +1,8 @@
+// Imported rather than written as java.util.Properties: inside this script the
+// name `java` resolves to Gradle's JavaPluginExtension, which shadows the
+// java package and makes `java.util.Properties()` fail to compile.
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -23,7 +28,7 @@ if (googleServicesJson.exists()) {
 // machine or Codemagic env vars), otherwise it falls back to debug keys so
 // `flutter build apk --release` still works for testing.
 val keystorePropertiesFile = rootProject.file("key.properties")
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 if (hasReleaseKeystore) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
@@ -40,10 +45,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         // Whispr mobile app package ID
         applicationId = "com.whisprwords.app"
@@ -58,10 +59,10 @@ android {
     signingConfigs {
         if (hasReleaseKeystore) {
             create("release") {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"]
+                keyPassword = keystoreProperties["keyPassword"]
+                storeFile = file(keystoreProperties["storeFile"])
+                storePassword = keystoreProperties["storePassword"]
             }
         }
     }
@@ -79,6 +80,15 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
         }
+    }
+}
+
+// Kotlin 2.x compiler DSL. The old `kotlinOptions { jvmTarget = ... }` form is
+// deprecated, and the Kotlin DSL compiles build scripts with warnings treated
+// as errors, so the deprecated form fails the build outright.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
