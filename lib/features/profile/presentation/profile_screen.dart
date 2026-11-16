@@ -608,6 +608,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
       child: Column(
         children: [
           _buildFeatureItem(
+            icon: Icons.space_dashboard_outlined,
+            title: 'Creator studio',
+            subtitle: 'Manage posts, drafts and stories',
+            onTap: () => context.push('/creator/studio'),
+          ),
+          _buildDivider(),
+          _buildFeatureItem(
             icon: Icons.book_outlined,
             title: 'My Chronicles',
             subtitle: 'View and manage your writing',

@@ -1,25 +1,30 @@
 import 'package:flutter/foundation.dart';
+
 import 'auth_session_store.dart';
 import 'push_notification_service.dart';
 
-/// SessionManager handles session lifecycle and expiration
-/// This is separate from auth state restoration - that happens in SplashScreen
+/// SessionManager owns session lifecycle.
+///
+/// Whispr is a reading-and-writing app: a reader who opens it once a month must
+/// not be signed out. So there is **no fixed session expiry** here. A session
+/// ends when the user signs out, when the refresh token is rejected, or when
+/// the stored bundle can no longer be decrypted. Everything else is silent
+/// refresh, which is what "login stays saved" actually requires.
 class SessionManager {
   static final SessionManager _instance = SessionManager._internal();
   factory SessionManager() => _instance;
   SessionManager._internal();
 
   DateTime? _sessionStartTime;
-  
-  // Maximum session duration: 30 days from login (for long-lasting sessions)
-  static const Duration _maxSessionDuration = Duration(days: 30);
 
-  /// Initialize session tracking (called on app startup)
+  /// Called on app start. Restores the session start marker used only for
+  /// display/telemetry — it never expires the session.
   Future<void> initializeSession() async {
     final stored = await AuthSessionStore.restore();
-    _sessionStartTime = stored?.sessionStart ?? DateTime.now();
+    _sessionStartTime = stored?.sessionStart ?? stored?.savedAt;
 
-    if (stored != null) {
+    if (stored != null && stored.sessionStart == null) {
+      // Stamp the start once, so "signed in since" survives restarts.
       await AuthSessionStore.save(
         accessToken: stored.accessToken,
         refreshToken: stored.refreshToken,
@@ -27,116 +32,58 @@ class SessionManager {
         sessionStart: _sessionStartTime,
       );
     }
-    
-    debugPrint('Session tracking initialized - Start: $_sessionStartTime');
+
+    debugPrint('[SessionManager] initialized, signed in since $_sessionStartTime');
   }
 
-  /// Update the last activity time (called when app comes to foreground)
-  Future<void> updateSessionActivity() async {
-    debugPrint('Session activity updated - session remains active');
-  }
+  /// Kept for call sites that ping on foreground; a session no longer lapses
+  /// from inactivity, so this is a no-op by design.
+  Future<void> updateSessionActivity() async {}
 
-  /// Check if the current session is still valid based on max duration
-  /// Returns true if session should remain active
+  /// A session is valid whenever a token is stored. Expiry is handled by
+  /// [checkAndHandleSessionExpiration], which only acts on a rejected refresh.
   Future<bool> isSessionValid() async {
     final stored = await AuthSessionStore.restore();
-    final accessToken = stored?.accessToken;
-    
-    if (accessToken == null) {
-      debugPrint('No access token found - session invalid');
-      return false;
-    }
-
-    if (_sessionStartTime == null) {
-      debugPrint('Session start time not initialized - session invalid');
-      return false;
-    }
-
-    // Check maximum session duration only
-    final totalElapsed = DateTime.now().difference(_sessionStartTime!);
-    if (totalElapsed > _maxSessionDuration) {
-      debugPrint('Session expired due to max duration after $totalElapsed');
-      return false;
-    }
-
-    return true;
+    final token = stored?.accessToken;
+    final valid = token != null && token.isNotEmpty;
+    if (!valid) debugPrint('[SessionManager] no access token stored - session invalid');
+    return valid;
   }
 
-  /// Check if session has expired and handle accordingly
+  /// Called on foreground resume.
+  ///
+  /// This deliberately does **not** sign the user out. It only clears local
+  /// state when secure storage has genuinely lost the session (for example the
+  /// user removed the device passcode and the Keystore entry was dropped).
+  /// Network failures, expired access tokens and offline launches are all
+  /// normal and must never end a session.
   Future<void> checkAndHandleSessionExpiration() async {
     try {
       final stored = await AuthSessionStore.restore();
-      final accessToken = stored?.accessToken;
+      if (stored != null && stored.accessToken.isNotEmpty) return;
 
-      if (accessToken == null) {
-        // No session to validate
-        return;
-      }
-
-      final isValid = await isSessionValid();
-      if (!isValid) {
-        // Session has expired
-        final totalElapsed = _sessionStartTime != null
-            ? DateTime.now().difference(_sessionStartTime!)
-            : null;
-            
-        debugPrint('Session expired due to 30-day limit - Total duration: $totalElapsed');
-        
-        // Show session expiration notification (optional)
-        try {
-          final pushService = PushNotificationService();
-          await pushService.showSessionExpiredNotification();
-        } catch (e) {
-          debugPrint('Failed to show session expiration notification: $e');
-        }
-
-        // Clear the session data
-        await _clearSessionData();
-      }
+      debugPrint('[SessionManager] session could not be restored - clearing local state');
+      await clearSessionData();
     } catch (e) {
-      debugPrint('Error checking session: $e');
+      debugPrint('[SessionManager] error checking session: $e');
     }
   }
 
-  /// Clear all session data from local storage
+  /// Full sign-out. Only call this when the user taps Sign out or the server
+  /// has explicitly rejected the refresh token.
   Future<void> clearSessionData() async {
     try {
       await AuthSessionStore.clear();
       _sessionStartTime = null;
-      
-      debugPrint('Session data cleared from storage');
+      debugPrint('[SessionManager] session cleared');
     } catch (e) {
-      debugPrint('Error clearing session data: $e');
+      debugPrint('[SessionManager] error clearing session: $e');
     }
   }
 
-  /// Clear all session data from local storage (kept for backward compatibility)
-  Future<void> _clearSessionData() async {
-    try {
-      await AuthSessionStore.clear();
-      _sessionStartTime = null;
-      
-      debugPrint('Session data cleared from storage');
-    } catch (e) {
-      debugPrint('Error clearing session data: $e');
-    }
-  }
-
-  /// Get the time remaining before session expires due to max duration
-  Duration? getTimeUntilMaxDurationExpiration() {
-    if (_sessionStartTime == null) return null;
-
-    final elapsed = DateTime.now().difference(_sessionStartTime!);
-    final remaining = _maxSessionDuration - elapsed;
-    
-    if (remaining.isNegative) return null;
-    return remaining;
-  }
-
-  /// Reset session (called after successful login)
+  /// Called after a successful sign-in to stamp the start time.
   Future<void> resetSession() async {
     _sessionStartTime = DateTime.now();
-    
     try {
       final stored = await AuthSessionStore.restore();
       if (stored != null) {
@@ -147,9 +94,23 @@ class SessionManager {
           sessionStart: _sessionStartTime,
         );
       }
-      debugPrint('Session reset after login');
     } catch (e) {
-      debugPrint('Error resetting session: $e');
+      debugPrint('[SessionManager] error resetting session: $e');
+    }
+  }
+
+  /// Surfaces a "signed in for N days" value for the profile screen.
+  Duration? getSessionAge() {
+    if (_sessionStartTime == null) return null;
+    return DateTime.now().difference(_sessionStartTime!);
+  }
+
+  /// Shown when the server definitively ended the session.
+  Future<void> notifySessionEnded() async {
+    try {
+      await PushNotificationService().showSessionExpiredNotification();
+    } catch (e) {
+      debugPrint('[SessionManager] failed to show session notification: $e');
     }
   }
 }

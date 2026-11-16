@@ -77,6 +77,8 @@ web/index.html
 # Firebase
 google-services.json
 GoogleService-Info.plist
+# Base64 copies made for pasting into Codemagic env vars
+*.b64.txt
 
 # Supabase
 supabase/.branches

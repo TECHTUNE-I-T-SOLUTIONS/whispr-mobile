@@ -35,17 +35,35 @@ class _EducationalGamePlayScreenState extends State<EducationalGamePlayScreen> {
     _loadChallenges();
   }
 
+  String? _loadError;
+
   Future<void> _loadChallenges() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+
     try {
-      final challenges = await _gameService.getGameChallenges(_gameSlug);
+      // A hung request used to leave this screen on a spinner forever, which
+      // reads as "the game is broken". Ten seconds is well past a normal
+      // round trip, so timing out here means something is genuinely wrong.
+      final challenges = await _gameService
+          .getGameChallenges(_gameSlug)
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       setState(() {
         _challenges = challenges;
         _loading = false;
       });
     } catch (e) {
+      debugPrint('[GamePlay] could not load challenges for $_gameSlug: $e');
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadError = 'We could not load this game. Check your connection and try again.';
+      });
     }
   }
 
@@ -118,21 +136,49 @@ class _EducationalGamePlayScreenState extends State<EducationalGamePlayScreen> {
     }
 
     if (_challenges.isEmpty) {
+      final isError = _loadError != null;
       return Scaffold(
         appBar: AppBar(title: Text(_gameTitle)),
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
-              const Text('No challenges available'),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => context.pop(),
-                child: const Text('Go Back'),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isError ? Icons.cloud_off_rounded : Icons.hourglass_empty_rounded,
+                  size: 44,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isError ? 'Could not load this game' : 'This game is not ready yet',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _loadError ?? 'New challenges for this game are still being written. Try another one below.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.5,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                FilledButton.icon(
+                  onPressed: _loadChallenges,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Try again'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.canPop() ? context.pop() : context.go('/games'),
+                  child: const Text('Pick another game'),
+                ),
+              ],
+            ),
           ),
         ),
       );

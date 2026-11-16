@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/api_service.dart';
 import '../../../core/services/stories_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/creator_form.dart';
 import '../../auth/auth_state.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
@@ -207,27 +209,15 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canSave = !(_isSaving || _isLoadingCreator || _creatorId == null);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Story'),
-        backgroundColor: Theme.of(context).cardColor,
-        elevation: 0,
+        title: const Text('New story'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/stories'),
         ),
-        actions: [
-          TextButton(
-            onPressed: (_isSaving || _isLoadingCreator || _creatorId == null) ? null : _saveStory,
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
-          ),
-        ],
       ),
       body: _isLoadingCreator
           ? const Center(
@@ -267,24 +257,30 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                     ),
                   ),
                 )
-              : Form(
+              : Column(
+                  children: [
+                    Expanded(
+                      child: Form(
                   key: _formKey,
                   child: ListView(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                     children: [
-                      // Title
-                      _buildSectionHeader('Story Title *'),
-                      const SizedBox(height: 8),
+                      CreatorForm.header(
+                        context,
+                        'Start a story',
+                        'Give it a name and a home. You can add chapters right after this.',
+                      ),
+                      CreatorForm.label(context, 'Story title', required: true),
                       TextFormField(
                         controller: _titleController,
+                        maxLength: CreatorForm.titleLimit,
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.35),
                         decoration: InputDecoration(
-                          hintText: 'Enter your story title',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          hintText: 'e.g. The Salt Road',
+                          counterStyle: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
                           ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          prefixIcon: const Icon(Icons.title),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -293,188 +289,121 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Genre dropdown
-                      _buildSectionHeader('Genre *'),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        decoration: InputDecoration(
-                          hintText: 'Select genre',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          prefixIcon: const Icon(Icons.category),
-                        ),
-                        items: _genres.map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedGenre = newValue;
-                          });
-                        },
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Genre is required';
-                          }
-                          return null;
-                        },
+                      CreatorForm.label(context, 'Genre', required: true),
+                      CreatorForm.dropdown<String>(
+                        value: _selectedGenre,
+                        items: _genres,
+                        hint: 'Choose a genre',
+                        icon: Icons.local_offer_outlined,
+                        onChanged: (value) => setState(() => _selectedGenre = value),
+                        validator: (value) => (value == null || value.isEmpty) ? 'Pick a genre' : null,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Status dropdown
-                      _buildSectionHeader('Status'),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        decoration: InputDecoration(
-                          hintText: 'Select status (default: draft)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          prefixIcon: const Icon(Icons.publish),
-                        ),
-                        items: _statuses.map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value == 'published' ? 'Published' : 'Draft'),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedStatus = newValue;
-                          });
-                        },
+                      CreatorForm.label(context, 'Visibility'),
+                      CreatorForm.dropdown<String>(
+                        value: _selectedStatus,
+                        items: _statuses,
+                        hint: 'Draft for now',
+                        icon: Icons.visibility_outlined,
+                        labelOf: (value) => value == 'published' ? 'Published — visible to everyone' : 'Draft — only you can see it',
+                        onChanged: (value) => setState(() => _selectedStatus = value),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Description
-                      _buildSectionHeader('Description'),
-                      const SizedBox(height: 8),
+                      CreatorForm.label(context, 'Description'),
                       TextFormField(
                         controller: _descriptionController,
-                        decoration: InputDecoration(
-                          hintText: 'Describe your story (optional)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          alignLabelWithHint: true,
-                        ),
                         maxLines: 4,
+                        maxLength: CreatorForm.descriptionLimit,
+                        style: const TextStyle(fontSize: 14.5, height: 1.55),
+                        decoration: InputDecoration(
+                          hintText: 'What is this story about?',
+                          alignLabelWithHint: true,
+                          counterStyle: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 14),
 
-                      // Excerpt
-                      _buildSectionHeader('Excerpt / Short Description'),
-                      const SizedBox(height: 8),
+                      CreatorForm.label(context, 'Excerpt'),
                       TextFormField(
                         controller: _excerptController,
-                        decoration: InputDecoration(
-                          hintText: 'A short excerpt to show readers (optional)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          alignLabelWithHint: true,
-                        ),
                         maxLines: 3,
+                        maxLength: CreatorForm.excerptLimit,
+                        style: const TextStyle(fontFamily: AppTheme.serifFamily, fontSize: 15, height: 1.5),
+                        decoration: InputDecoration(
+                          hintText: 'The line that makes a reader start',
+                          alignLabelWithHint: true,
+                          counterStyle: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 24),
-
-                      // Cover Image URL
-                      _buildSectionHeader('Cover Image URL'),
-                      const SizedBox(height: 8),
+                      CreatorForm.label(context, 'Cover image'),
                       TextFormField(
                         decoration: InputDecoration(
-                          hintText: 'Paste image URL (optional)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          prefixIcon: const Icon(Icons.link),
+                          hintText: 'Paste an image URL (optional)',
+                          prefixIcon: Icon(Icons.image_outlined, size: 19),
                         ),
+                        keyboardType: TextInputType.url,
                         onChanged: (value) {
                           setState(() => _coverImageUrl = value.trim().isEmpty ? null : value.trim());
                         },
                       ),
                       if (_coverImageUrl != null && _coverImageUrl!.isNotEmpty) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppTheme.borderRadiusM),
                           child: Image.network(
                             _coverImageUrl!,
-                            height: 200,
+                            height: 190,
                             width: double.infinity,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
-                                height: 200,
+                                height: 190,
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.errorContainer,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(AppTheme.borderRadiusM),
                                 ),
-                                child: const Center(child: Text('Invalid image URL')),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  'That URL did not load an image',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer, fontSize: 13),
+                                ),
                               );
                             },
                           ),
                         ),
                       ],
-                      const SizedBox(height: 24),
-
-                      // Info
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'You can add chapters to your story after creating it. '
-                                'If you choose "Published", your story will be visible to everyone immediately.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 22),
+                      CreatorForm.note(
+                        context,
+                        _selectedStatus == 'published'
+                            ? 'Chapters come next — you will land on the chapter editor straight after this.'
+                            : 'Saved as a draft. Publish it whenever you are ready, from your stories list.',
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 20),
                     ],
                   ),
+                      ),
+                    ),
+                    CreatorForm.actionBar(
+                      context,
+                      label: _selectedStatus == 'published' ? 'Publish story' : 'Save draft',
+                      busy: _isSaving,
+                      busyLabel: 'Saving…',
+                      onPressed: canSave ? _saveStory : null,
+                    ),
+                  ],
                 ),
     );
   }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontWeight: FontWeight.w600,
-        fontSize: 14,
-      ),
-    );
-  }
 }
+

@@ -21,4 +21,20 @@ class ContentCacheService {
     if (age > maxAge.inMilliseconds) return null;
     return jsonDecode(data);
   }
+
+  /// Drops one cached entry, used after a mutation so the next read refetches.
+  Future<void> remove(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_prefix$key');
+    await prefs.remove('$_prefix${key}_time');
+  }
+
+  /// Wipes the whole cache, for sign-out.
+  Future<void> clearAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith(_prefix)).toList();
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
+  }
 }

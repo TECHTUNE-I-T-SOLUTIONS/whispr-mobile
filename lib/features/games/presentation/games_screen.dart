@@ -30,26 +30,52 @@ class _GamesScreenState extends State<GamesScreen> {
   }
 
   Future<void> _load() async {
+    // The game catalogue is what the user came for, so it loads alone and
+    // paints as soon as it arrives. Progress, achievements and guides follow
+    // in the background and fill in when they land.
     try {
       final games = await _service.listGames();
-      final modules = await _service.listModules();
-      final progress = await _loadProgress();
-      final achievements = await _service.listAchievements();
-      final earned = await _loadEarnedAchievements();
-
       if (!mounted) return;
       setState(() {
         _games = games;
-        _modules = modules;
-        _progress = progress;
-        _achievements = achievements;
-        _earnedAchievements = earned;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Games] catalogue failed, using the built-in list: $e');
       if (!mounted) return;
       setState(() => _loading = false);
     }
+
+    Future<void> guarded(String label, Future<void> Function() run) async {
+      try {
+        await run();
+      } catch (e) {
+        debugPrint('[Games] $label failed: $e');
+      }
+    }
+
+    await Future.wait([
+      guarded('modules', () async {
+        final modules = await _service.listModules();
+        if (!mounted) return;
+        setState(() => _modules = modules);
+      }),
+      guarded('progress', () async {
+        final progress = await _loadProgress();
+        if (!mounted) return;
+        setState(() => _progress = progress);
+      }),
+      guarded('achievements', () async {
+        final achievements = await _service.listAchievements();
+        if (!mounted) return;
+        setState(() => _achievements = achievements);
+      }),
+      guarded('earned', () async {
+        final earned = await _loadEarnedAchievements();
+        if (!mounted) return;
+        setState(() => _earnedAchievements = earned);
+      }),
+    ]);
   }
 
   Future<List<Map<String, dynamic>>> _loadProgress() async {
@@ -259,7 +285,7 @@ class _GamesScreenState extends State<GamesScreen> {
           final card = cards[index];
           final game = games.firstWhere(
             (g) => g['slug'] == card.$2,
-            orElse: () => _fallbackGames().firstWhere((g) => g['slug'] == card.$2, orElse: () => {'slug': card.$2, 'title': card.$1, 'description': card.$4, 'game_type': card.$2}),
+            orElse: () => <String, dynamic>{'slug': card.$2, 'title': card.$1, 'description': card.$4, 'game_type': card.$2},
           );
 
           return GestureDetector(
@@ -534,7 +560,25 @@ class _GamesScreenState extends State<GamesScreen> {
     return ActionChip(
       avatar: Icon(icon, size: 18),
       label: Text(label),
-      onPressed: () => _startGame(_fallbackGames().firstWhere((g) => g['slug'] == slug)),
+      onPressed: () {
+        // Prefer the catalogue entry (it carries the server config), then the
+        // built-in one. Never throw: a missing slug falls back to a stub so the
+        // tap always opens something.
+        final games = _games.isNotEmpty ? _games : _fallbackGames();
+        final match = games.where((g) => g['slug'] == slug || g['id'] == slug).toList();
+        _startGame(
+          match.isNotEmpty
+              ? match.first
+              : {
+                  'id': slug,
+                  'slug': slug,
+                  'title': label,
+                  'description': '',
+                  'game_type': slug,
+                  'config': const <String, dynamic>{},
+                },
+        );
+      },
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       labelStyle: TextStyle(
         color: Theme.of(context).colorScheme.onPrimaryContainer,

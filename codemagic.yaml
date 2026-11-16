@@ -1,10 +1,29 @@
 workflows:
-  default-workflow:
-    name: Default Workflow
-    instance_type: mac_mini_m2
+  android-release:
+    name: Whispr Mobile - Android Release
+    instance_type: linux_x2
+    max_build_duration: 60
     environment:
+      flutter: 3.41.5
+      java: 17
       groups:
+        # App / API environment variables (unchanged set).
         - whisprmobile
+        # Android signing. Required for a Play-Store-valid build:
+        #   ANDROID_KEYSTORE_BASE64  base64 of whispr-release.jks
+        #   KEYSTORE_PASSWORD        keystore (store) password
+        #   KEY_ALIAS                key alias inside the keystore
+        #   KEY_PASSWORD             password for that key alias
+        # If this group is absent the build still runs but falls back to
+        # debug signing, which Google Play will reject.
+        - whispr_android_signing
+      vars:
+        PACKAGE_NAME: "com.whisprwords.app"
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
     triggering:
       events:
         - push
@@ -57,28 +76,70 @@ workflows:
           write_env_file .env
           cp .env .env.local
 
+      - name: Decode release keystore
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 not set - falling back to debug signing. Google Play will reject this build."
+            exit 0
+          fi
+
+          echo "Decoding upload keystore"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$CM_BUILD_DIR/android/whispr-release.jks"
+
+          cat > "$CM_BUILD_DIR/android/key.properties" <<EOF
+          storeFile=$CM_BUILD_DIR/android/whispr-release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+          echo "key.properties written"
+
+      - name: Decode google-services.json
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+
+          if [ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+            echo "::warning::GOOGLE_SERVICES_JSON_BASE64 not set - building without FCM. Push notifications will be disabled in this build."
+            exit 0
+          fi
+
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > "$CM_BUILD_DIR/android/app/google-services.json"
+          echo "google-services.json written"
+
       - name: Get Flutter dependencies
         script: |
-          flutter upgrade
+          #!/bin/bash
+          set -euo pipefail
           flutter pub get
-      
+
+      - name: Static analysis
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          flutter analyze --no-fatal-infos
+
       - name: Build Android Release
         script: |
+          #!/bin/bash
+          set -euo pipefail
           flutter build apk --release
           flutter build appbundle --release
-      
+
       - name: Publish to GitHub
         script: |
           #!/bin/bash
-          
-          # Make script executable
+          set -euo pipefail
           chmod +x ./scripts/create-github-release.sh
-          
-          # Run the GitHub release script
           ./scripts/create-github-release.sh
     artifacts:
       - build/app/outputs/apk/release/*.apk
       - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
     publishing:
       email:
         recipients:

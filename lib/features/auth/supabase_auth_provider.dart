@@ -7,6 +7,7 @@ import '../../core/network/api_service.dart';
 import '../../core/services/auth_session_store.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/session_manager.dart';
+import '../../core/utils/auth_guard.dart';
 
 // Auth state notifier
 class AuthState {
@@ -93,16 +94,20 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
             sessionStart: storedSession.sessionStart,
           );
 
+          AuthGuard.setSignedIn(true);
+
           debugPrint('Auth state restored successfully for user: ${storedSession.user.penName}');
         } catch (e) {
           debugPrint('Error restoring session: $e');
           await AuthSessionStore.clear();
-          
+          AuthGuard.setSignedIn(false);
+
           state = state.copyWith(isLoading: false, error: null);
           debugPrint('Corrupted session data cleared');
         }
       } else {
         // No tokens found
+        AuthGuard.setSignedIn(false);
         debugPrint('No stored credentials found - starting fresh');
         state = state.copyWith(isLoading: false, error: null);
       }
@@ -172,6 +177,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         error: null,
       );
 
+      AuthGuard.setSignedIn(true);
       debugPrint('Login successful for user: ${creator.penName}');
       return true;
     } catch (e) {
@@ -240,6 +246,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         error: null,
       );
 
+      AuthGuard.setSignedIn(true);
       debugPrint('Signup successful for user: ${creator.penName}');
       return creator;
     } catch (e) {
@@ -272,6 +279,15 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       }
       */
 
+      // Deactivate this device's push token while the access token is still
+      // valid — the /push/fcm-token endpoint authenticates with it. Without
+      // this the phone keeps receiving the old account's notifications.
+      try {
+        await PushNotificationService().unregisterToken();
+      } catch (e) {
+        debugPrint('Failed to unregister push token: $e');
+      }
+
       await AuthSessionStore.clear();
       debugPrint('Session data cleared from storage');
 
@@ -282,6 +298,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       await Supabase.instance.client.auth.signOut();
 
       // Reset state completely
+      AuthGuard.setSignedIn(false);
       state = AuthState(isLoading: false);
       
       debugPrint('Logout successful - auth state reset');

@@ -73,12 +73,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
     try {
       // Initialize auth state from local storage
       debugPrint('[SplashScreen] Starting auth initialization...');
-      await ref.read(authStateProvider.notifier).initializeAuth();
-      await SessionManager().initializeSession();
+      // Restore the session while the brand animation plays, in parallel.
+      // The splash now lasts as long as the slower of the two instead of
+      // always spending two seconds idling on top of storage reads.
+      await Future.wait([
+        ref.read(authStateProvider.notifier).initializeAuth(),
+        SessionManager().initializeSession(),
+      ]);
+      await _animationController.forward();
       debugPrint('[SplashScreen] Auth initialization completed');
-      
-      // Wait for animations
-      await Future.delayed(const Duration(seconds: 2));
 
       if (mounted) {
         final authState = ref.read(authStateProvider);
@@ -95,12 +98,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
         }
       }
     } catch (e) {
+      // A restore failure must still get the user somewhere useful. Bouncing
+      // to onboarding is correct here: they can sign in again from there.
       debugPrint('[SplashScreen] Auth initialization error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Auth error: $e')),
-        );
-      }
+      if (mounted) context.go('/onboarding');
     }
   }
 

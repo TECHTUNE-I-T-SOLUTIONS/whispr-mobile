@@ -24,6 +24,8 @@ import '../../features/guides/presentation/guides_screen.dart';
 import '../../features/guides/presentation/guide_detail_screen.dart';
 import '../../features/profile/presentation/reviews_screen.dart';
 import '../../features/portfolio/presentation/portfolio_screen.dart';
+import '../../features/creator/presentation/creator_dashboard_screen.dart';
+import '../../features/creator/presentation/creator_settings_screen.dart';
 import '../../features/games/presentation/game_play_screen.dart';
 import '../../features/games/presentation/educational_game_play_screen.dart';
 import '../../features/stories/presentation/stories_screen.dart';
@@ -51,7 +53,12 @@ final router = GoRouter(
       return '/splash';
     }
 
-    final isLoggedIn = await AuthGuard.isLoggedIn();
+    // Never redirect while the session is still being read from storage — a
+    // returning user must not be bounced to /login for the half second the
+    // restore takes. Splash owns that wait.
+    if (!AuthGuard.isReady) return null;
+
+    final isLoggedIn = AuthGuard.isLoggedInNow;
     final isAuthRoute = location.startsWith('/login') ||
                         location.startsWith('/signup') ||
                         location == '/splash' ||
@@ -128,7 +135,15 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/chronicles/create',
-          builder: (context, state) => const CreateChroniclesPostScreen(),
+          builder: (context, state) {
+            // Opened from the daily challenge, the prompt is passed as extra.
+            final extra = state.extra;
+            final brief = extra is Map ? extra : const {};
+            return CreateChroniclesPostScreen(
+              challengeId: brief['challengeId'] as String?,
+              challengePrompt: brief['prompt'] as String?,
+            );
+          },
         ),
         GoRoute(
           path: '/whispr-wall',
@@ -309,6 +324,16 @@ final router = GoRouter(
       builder: (context, state) => const PremiumScreen(),
     ),
 
+    // Creator studio — the workspace for managing your own work. Declared
+    // before `/creator/:id` so "studio" is not parsed as a creator id.
+    GoRoute(
+      path: '/creator/studio',
+      builder: (context, state) => const CreatorDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/creator/settings',
+      builder: (context, state) => const CreatorSettingsScreen(),
+    ),
     // Creator profile
     GoRoute(
       path: '/creator/:id',

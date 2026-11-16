@@ -204,6 +204,26 @@ class ApiService {
     }
   }
 
+  // Generic PATCH request — the creator endpoints use PATCH for partial updates
+  Future<T> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    T Function(dynamic)? fromJson,
+  }) async {
+    await ensureInitialized();
+    try {
+      final response = await _dio.patch(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+      );
+      return fromJson != null ? fromJson(response.data) : response.data as T;
+    } on dio.DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // Generic DELETE request
   Future<T> delete<T>(
     String path, {

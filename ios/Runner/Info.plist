@@ -73,12 +73,19 @@
 			<!-- whispr:// scheme for deep linking -->
 			<dict>
 				<key>CFBundleURLName</key>
-				<string>com.example.whisprmobile</string>
+				<string>com.whisprwords.app</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<string>whispr</string>
 				</array>
 			</dict>
+		</array>
+		<!-- Required for FCM: lets the app receive data-only pushes while
+		     backgrounded. The visible notification icon on iOS is always the
+		     app icon, so no separate monochrome asset is needed here. -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
 		</array>
 	</dict>
 </plist>

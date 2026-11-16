@@ -9,7 +9,13 @@ import '../../../core/network/api_service.dart';
 import '../../../core/services/chains_service.dart';
 import '../../../core/services/content_cache_service.dart';
 import '../../../core/services/chronicles_service.dart';
+import '../../../core/services/daily_challenge_service.dart';
 import '../../../core/services/feed_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../auth/supabase_auth_provider.dart';
+import '../widgets/daily_challenge_card.dart';
+import '../widgets/gated_preview.dart';
+import '../widgets/notification_prompt.dart';
 
 final _feedServiceProvider = Provider((ref) => FeedService(ApiService.instance, ContentCacheService()));
 final _chainsServiceProvider = Provider((ref) => ChainsService(ApiService.instance, ContentCacheService()));
@@ -26,14 +32,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final PageController _pageController = PageController();
   final CarouselSliderController _carouselController = CarouselSliderController();
   int _tabIndex = 0;
-  int _currentCarouselIndex = 0;
   List<Post> _adminPosts = [];
   List<Post> _chroniclePosts = [];
   List<dynamic> _chains = [];
+  DailyChallengeState? _challenge;
+  bool _loadingFeed = true;
 
   @override
   void initState() {
     super.initState();
+    _loadChallenge();
     _load();
   }
 
@@ -43,349 +51,357 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  /// The challenge is local and instant, so it renders first and the network
+  /// content slides in underneath instead of blocking the whole screen.
+  Future<void> _loadChallenge() async {
+    final challenge = await DailyChallengeService.instance.load();
+    if (!mounted) return;
+    setState(() => _challenge = challenge);
+  }
+
+  /// Fetches the three feeds concurrently and lets each one paint as soon as
+  /// it lands. A failing endpoint is logged and leaves that section empty;
+  /// it never blocks the other two or hangs the loading state.
   Future<void> _load({bool forceRefresh = false}) async {
     final feedService = ref.read(_feedServiceProvider);
     final chroniclesService = ref.read(_chroniclesServiceProvider);
     final chainsService = ref.read(_chainsServiceProvider);
 
-    final feed = await feedService.getFeed(forceRefresh: forceRefresh);
-    final chronicles = await chroniclesService.getPublicChronicles(forceRefresh: forceRefresh);
-    final chains = await chainsService.getChains(forceRefresh: forceRefresh);
-    if (!mounted) return;
-    setState(() {
-      _adminPosts = feed
-          .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
-          .where((post) => post.source == 'admin')
-          .toList();
-      _chroniclePosts = chronicles
-          .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
-          .where((post) => post.source == 'creator' || post.source == 'user')
-          .toList();
-      _chains = chains;
-    });
+    Future<void> guarded(String label, Future<void> Function() run) async {
+      try {
+        await run();
+      } catch (e) {
+        debugPrint('[HomeScreen] $label failed: $e');
+      }
+    }
+
+    await Future.wait([
+      guarded('feed', () async {
+        final feed = await feedService.getFeed(forceRefresh: forceRefresh);
+        if (!mounted) return;
+        setState(() {
+          _adminPosts = feed
+              .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
+              .where((post) => post.source == 'admin')
+              .toList();
+        });
+      }),
+      guarded('chronicles', () async {
+        final chronicles = await chroniclesService.getPublicChronicles(forceRefresh: forceRefresh);
+        if (!mounted) return;
+        setState(() {
+          _chroniclePosts = chronicles
+              .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
+              .where((post) => post.source == 'creator' || post.source == 'user')
+              .toList();
+        });
+      }),
+      guarded('chains', () async {
+        final chains = await chainsService.getChains(forceRefresh: forceRefresh);
+        if (!mounted) return;
+        setState(() => _chains = chains);
+      }),
+    ]);
+
+    if (mounted) setState(() => _loadingFeed = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: () => _load(forceRefresh: true),
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _hero(context)),
-            SliverToBoxAdapter(child: _featureCarousel(context)),
-            SliverToBoxAdapter(child: _tabBar()),
-            SliverFillRemaining(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) => setState(() => _tabIndex = index),
-                children: [
-                  _discoverView(context),
-                  _adminFeedView(context),
-                  _chroniclesFeedView(context),
-                  _gamesView(context),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _hero(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-              Theme.of(context).colorScheme.primaryContainer,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: const [0.0, 0.5, 1.0],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.auto_awesome,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome to Whispr',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Discover stories, improve your craft',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.95),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 1,
-                ),
-              ),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _pill('General', Icons.edit_note_outlined),
-                  _pill('Chronicles', Icons.auto_stories_outlined),
-                  _pill('Chains', Icons.link_outlined),
-                  _pill('Games', Icons.sports_esports_outlined),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _featureCarousel(BuildContext context) {
-    final features = [
-      {
-        'title': 'AI-Powered Games',
-        'subtitle': 'Master writing with intelligent feedback',
-        'icon': Icons.psychology,
-        'color': Theme.of(context).colorScheme.primary,
-        'route': '/games',
-      },
-      {
-        'title': 'Read Stories',
-        'subtitle': 'Discover captivating tales from creators',
-        'icon': Icons.auto_stories,
-        'color': Theme.of(context).colorScheme.secondary,
-        'route': '/stories',
-      },
-      {
-        'title': 'Create Chronicles',
-        'subtitle': 'Share your writing with the world',
-        'icon': Icons.edit_note,
-        'color': Theme.of(context).colorScheme.tertiary,
-        'route': '/chronicles/create',
-      },
-      {
-        'title': 'Join Chains',
-        'subtitle': 'Collaborate on collaborative stories',
-        'icon': Icons.link,
-        'color': const Color(0xFF7C3AED),
-        'route': '/chains',
-      },
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: CarouselSlider(
-        options: CarouselOptions(
-          height: 140,
-          viewportFraction: 0.9,
-          enlargeCenterPage: true,
-          autoPlay: true,
-          autoPlayInterval: const Duration(seconds: 5),
-          autoPlayAnimationDuration: const Duration(milliseconds: 800),
-          autoPlayCurve: Curves.easeInOutCubic,
-          onPageChanged: (index, reason) {
-            setState(() => _currentCarouselIndex = index);
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await Future.wait([_load(forceRefresh: true), _loadChallenge()]);
           },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(child: _topSection(context)),
+              SliverToBoxAdapter(child: _featureCarousel(context)),
+              SliverToBoxAdapter(child: _tabBar()),
+              // The tabbed body must size to its content. The old code wrapped
+              // a PageView in SliverFillRemaining, which forced every tab to
+              // exactly one screen and clipped the rest.
+              _tabIndex == 3 ? _gamesSliver(context) : _feedSliver(context),
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            ],
+          ),
         ),
-        carouselController: _carouselController,
-         items: features.asMap().entries.map((entry) {
-          final index = entry.key;
-          final feature = entry.value;
-          final isActive = index == _currentCarouselIndex;
-          final color = feature['color'] as Color;
-          final title = feature['title'] as String;
-          final subtitle = feature['subtitle'] as String;
-          final icon = feature['icon'] as IconData;
-          final route = feature['route'] as String;
+      ),
+    );
+  }
 
-          return Builder(
-            builder: (BuildContext context) {
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                margin: EdgeInsets.symmetric(
-                  horizontal: isActive ? 4 : 12,
-                  vertical: isActive ? 0 : 8,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: LinearGradient(
-                    colors: [
-                      color,
-                      color.withValues(alpha: 0.7),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: isActive ? 0.4 : 0.2),
-                      blurRadius: isActive ? 20 : 12,
-                      offset: const Offset(0, 8),
-                      spreadRadius: isActive ? 0 : -2,
+  /// Tab 0–2 content, sized to the content instead of the viewport.
+  Widget _feedSliver(BuildContext context) {
+    final tab = switch (_tabIndex) {
+      0 => _discoverChildren(context),
+      1 => _adminChildren(context),
+      _ => _chroniclesChildren(context),
+    };
+
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      sliver: SliverList(delegate: SliverChildListDelegate(tab)),
+    );
+  }
+
+  /// Games used to be squeezed into a PageView cell with its own scaffold and
+  /// app bar inside the home scroll view, which is why it rendered wrong. It
+  /// gets a card that opens the real games screen now.
+  Widget _gamesSliver(BuildContext context) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      sliver: SliverList(
+        delegate: SliverChildListDelegate([
+          Row(
+            children: [
+              Expanded(
+                child: _actionCard(context, 'Games', 'Learn & improve', Icons.sports_esports_outlined, () => context.go('/games')),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _actionCard(context, 'Guides', 'Tutorials & tips', Icons.menu_book_outlined, () => context.go('/guides')),
+              ),
+            ],
+          ),
+          _sectionHeader(context, 'Continue playing', 'Your scores and daily streaks'),
+          _actionCard(
+            context,
+            'Open games',
+            'Word games, poetry puzzles and seasonal challenges',
+            Icons.extension_outlined,
+            () => context.go('/games'),
+          ),
+          const SizedBox(height: 12),
+          _actionCard(
+            context,
+            'Game profile',
+            'Achievements, XP and leaderboard position',
+            Icons.emoji_events_outlined,
+            () => context.go('/games/profile'),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Top of home: greeting, daily challenge, notification prompt.
+  // The old hero was a fixed marketing banner whose pills did not navigate
+  // anywhere, and it pushed the real content a full screen down. The daily
+  // challenge earns that space instead.
+  // ---------------------------------------------------------------------------
+
+  Widget _topSection(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    final name = authState.user?.penName.trim();
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? 'Good morning'
+        : hour < 17
+            ? 'Good afternoon'
+            : 'Good evening';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      greeting,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                        color: isDark ? Colors.white54 : Colors.black45,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      name == null || name.isEmpty ? 'Welcome to Whispr' : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'serif',
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
                     ),
                   ],
                 ),
-                child: InkWell(
-                  onTap: () => context.go(route),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: EdgeInsets.all(isActive ? 16 : 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(isActive ? 20 : 16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            icon,
-                            color: Colors.white,
-                            size: isActive ? 32 : 28,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedDefaultTextStyle(
-                                duration: const Duration(milliseconds: 300),
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: isActive ? 20 : 18,
-                                ) ?? const TextStyle(),
-                                child: Text(title),
-                              ),
-                              const SizedBox(height: 6),
-                              AnimatedDefaultTextStyle(
-                                duration: const Duration(milliseconds: 300),
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.95),
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: isActive ? 14 : 13,
-                                ) ?? const TextStyle(),
-                                child: Text(subtitle),
-                              ),
-                            ],
-                          ),
-                        ),
-                        AnimatedScale(
-                          duration: const Duration(milliseconds: 300),
-                          scale: isActive ? 1.0 : 0.8,
-                          child: Icon(
-                            Icons.arrow_forward_ios,
-                            color: Colors.white.withValues(alpha: 0.8),
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        }).toList(),
+              ),
+              _iconAction(
+                icon: Icons.search_rounded,
+                tooltip: 'Explore',
+                onTap: () => context.go('/chronicles'),
+              ),
+              const SizedBox(width: 4),
+              _iconAction(
+                icon: Icons.notifications_none_rounded,
+                tooltip: 'Notifications',
+                onTap: () => context.go('/notifications'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const NotificationPrompt(),
+          if (_challenge != null) ...[
+            DailyChallengeCard(
+              state: _challenge!,
+              onEnter: _startChallenge,
+              onRefresh: () => _load(forceRefresh: true),
+            ),
+            const SizedBox(height: 10),
+            StreakStrip(
+              current: _challenge!.currentStreak,
+              best: _challenge!.bestStreak,
+            ),
+          ] else
+            _challengeSkeleton(context),
+        ],
       ),
     );
   }
 
-  Widget _tabBar() {
-    final labels = ['Discover', 'General Posts', 'Chronicles', 'Games'];
+  Widget _iconAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+      icon: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 20),
+      ),
+    );
+  }
+
+  Widget _challengeSkeleton(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 168,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusXL),
+      ),
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.2,
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startChallenge() async {
+    final challenge = _challenge?.challenge;
+    if (challenge == null) return;
+
+    // The composer is the existing chronicles writer, handed the prompt so the
+    // user lands on a blank page that already has its brief.
+    await context.push(
+      '/chronicles/create',
+      extra: {'challengeId': challenge.id, 'prompt': challenge.prompt},
+    );
+
+    if (!mounted) return;
+    final updated = await DailyChallengeService.instance.load();
+    if (mounted) setState(() => _challenge = updated);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Feature carousel — kept, trimmed to posts that actually have a cover.
+  // ---------------------------------------------------------------------------
+
+  Widget _featureCarousel(BuildContext context) {
+    final posts = _adminPosts.where((p) => p.coverImage != null).take(5).toList();
+    if (posts.isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: CarouselSlider(
+        carouselController: _carouselController,
+        options: CarouselOptions(
+          height: 208,
+          viewportFraction: 0.86,
+          enlargeCenterPage: true,
+          enlargeFactor: 0.12,
+          enableInfiniteScroll: posts.length > 2,
+          padEnds: false,
+          onPageChanged: (index, reason) {},
+        ),
+        items: posts.map((post) => _heroCard(context, post)).toList(),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tabs
+  // ---------------------------------------------------------------------------
+
+  Widget _tabBar() {
+    const labels = ['Discover', 'General', 'Chronicles', 'Games'];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: List.generate(labels.length, (index) {
             final selected = index == _tabIndex;
             return Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 8),
               child: GestureDetector(
                 onTap: () {
                   setState(() => _tabIndex = index);
-                  _pageController.animateToPage(index, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                  _pageController.animateToPage(
+                    index,
+                    duration: AppTheme.shortAnimation,
+                    curve: Curves.easeOut,
+                  );
                 },
-                child: Column(
-                  children: [
-                    Text(labels[index], style: TextStyle(color: selected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).textTheme.bodySmall?.color, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 6),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      height: 2,
-                      width: selected ? 28 : 8,
-                      decoration: BoxDecoration(color: selected ? Theme.of(context).colorScheme.onSurface : Colors.transparent, borderRadius: BorderRadius.circular(99)),
+                child: AnimatedContainer(
+                  duration: AppTheme.shortAnimation,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Theme.of(context).colorScheme.primary
+                        : (isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.045)),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    labels[index],
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -395,10 +411,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _discoverView(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      children: [
+
+  // ---------------------------------------------------------------------------
+  // Tab bodies. These return children lists (not ListViews) so they can be
+  // nested inside the one CustomScrollView that owns the whole screen.
+  // ---------------------------------------------------------------------------
+
+  List<Widget> _discoverChildren(BuildContext context) {
+    return [
+      if (_loadingFeed && _adminPosts.isEmpty && _chroniclePosts.isEmpty)
+        _loadingBlock(context)
+      else ...[
         Row(
           children: [
             Expanded(child: _actionCard(context, 'Games', 'Learn & improve', Icons.sports_esports_outlined, () => context.go('/games'))),
@@ -406,70 +429,152 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Expanded(child: _actionCard(context, 'Guides', 'Tutorials & tips', Icons.menu_book_outlined, () => context.go('/guides'))),
           ],
         ),
-        const SizedBox(height: 16),
-        _sectionHeader(context, 'General highlights', 'Fresh poems and blogs from whispr'),
-        _horizontalPosts(context, _adminPosts.take(5).toList()),
-        _sectionHeader(context, 'Creator chronicles', 'Stories and writing from the community'),
-        _horizontalPosts(context, _chroniclePosts.take(5).toList()),
-        _sectionHeader(context, 'Writing Chains', 'Active collaboration stories'),
-        _horizontalChains(context),
+        if (_adminPosts.isNotEmpty) ...[
+          _sectionHeader(context, 'General highlights', 'Fresh poems and blogs from Whispr'),
+          _horizontalPosts(context, _adminPosts.take(5).toList()),
+        ],
+        if (_chroniclePosts.isNotEmpty) ...[
+          _sectionHeader(context, 'Creator chronicles', 'Stories and writing from the community'),
+          _horizontalPosts(context, _chroniclePosts.take(5).toList()),
+        ],
+        if (_chains.isNotEmpty) ...[
+          _sectionHeader(context, 'Writing chains', 'Active collaboration stories'),
+          _horizontalChains(context),
+        ],
+        if (_adminPosts.isEmpty && _chroniclePosts.isEmpty && !_loadingFeed)
+          _emptyBlock(
+            context,
+            'Nothing here yet',
+            'New poems and chronicles will appear as they publish.',
+          ),
       ],
-    );
+    ];
   }
 
-  Widget _adminFeedView(BuildContext context) {
+  List<Widget> _adminChildren(BuildContext context) {
     final poems = _adminPosts.where((post) => post.type == 'poem').toList();
     final blogs = _adminPosts.where((post) => post.type == 'blog').toList();
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      children: [
-        _sectionHeader(context, 'General poems', 'Curated poetic posts from whispr'),
-        ...poems.take(4).map((post) => _feedCard(context, post)),
-        _sectionHeader(context, 'General blogs', 'Curated blog posts from whispr'),
-        ...blogs.take(4).map((post) => _feedCard(context, post)),
+
+    if (poems.isEmpty && blogs.isEmpty) {
+      return [_loadingFeed ? _loadingBlock(context) : _emptyBlock(context, 'No posts yet', 'General poems and blogs land here.')];
+    }
+
+    return [
+      if (poems.isNotEmpty) ...[
+        _sectionHeader(context, 'General poems', 'Curated poetry from Whispr'),
+        ...poems.take(6).map((post) => _feedCard(context, post)),
       ],
-    );
+      if (blogs.isNotEmpty) ...[
+        _sectionHeader(context, 'General blogs', 'Curated writing from Whispr'),
+        ...blogs.take(6).map((post) => _feedCard(context, post)),
+      ],
+    ];
   }
 
-  Widget _chroniclesFeedView(BuildContext context) {
-    final chronicles = _chroniclePosts.where((post) => post.type == 'chronicle' || post.type == 'poem' || post.type == 'blog').toList();
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      children: [
-        _sectionHeader(context, 'Creator chronicles', 'Independent posts from chronicles creators'),
-        ...chronicles.take(6).map((post) => _feedCard(context, post)),
+  List<Widget> _chroniclesChildren(BuildContext context) {
+    final chronicles = _chroniclePosts
+        .where((post) => post.type == 'chronicle' || post.type == 'poem' || post.type == 'blog')
+        .toList();
+
+    if (chronicles.isEmpty && _chains.isEmpty) {
+      return [_loadingFeed ? _loadingBlock(context) : _emptyBlock(context, 'No chronicles yet', 'Creator posts appear here as they publish.')];
+    }
+
+    return [
+      if (chronicles.isNotEmpty) ...[
+        _sectionHeader(context, 'Creator chronicles', 'Independent posts from Chronicles creators'),
+        ...chronicles.take(8).map((post) => _feedCard(context, post)),
+      ],
+      if (_chains.isNotEmpty) ...[
         _sectionHeader(context, 'Writing chains', 'Browse collaborative stories'),
         ..._chains.take(6).map((chain) {
           final chainMap = chain as Map<String, dynamic>;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: GestureDetector(
-              onTap: () => context.go('/chains/${chainMap['id']}'),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(24)),
-                child: Text(chainMap['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
+          final entries = chainMap['entries_count'] ?? 0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
+                onTap: () => context.go('/chains/${chainMap['id']}'),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              chainMap['title'] ?? 'Untitled chain',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$entries ${entries == 1 ? 'entry' : 'entries'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, size: 20),
+                    ],
+                  ),
+                ),
               ),
             ),
           );
         }),
       ],
+    ];
+  }
+
+  Widget _loadingBlock(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.2,
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _gamesView(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      children: [
-        _sectionHeader(context, 'Games', 'Interactive templates and learning tools'),
-        Row(
-          children: [
-            Expanded(child: _actionCard(context, 'Play now', 'Open the game hub', Icons.sports_esports_outlined, () => context.go('/games'))),
-            const SizedBox(width: 12),
-            Expanded(child: _actionCard(context, 'Guides', 'Open tutorials', Icons.menu_book_outlined, () => context.go('/guides'))),
-          ],
-        ),
-      ],
+  Widget _emptyBlock(BuildContext context, String title, String body) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          Icon(Icons.auto_stories_outlined, size: 30, color: Theme.of(context).textTheme.bodySmall?.color),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Theme.of(context).textTheme.bodySmall?.color),
+          ),
+        ],
+      ),
     );
   }
 
@@ -552,38 +657,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
-
-  Widget _pill(String label, IconData icon) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.25),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: 16,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ],
-        ),
-      );
 
   Widget _actionCard(BuildContext context, String title, String subtitle, IconData icon, VoidCallback onTap) {
     return InkWell(
@@ -861,14 +934,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      post.excerpt ?? '',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                        height: 1.5,
-                      ),
+                    GatedPreview(
+                      text: post.excerpt ?? post.content,
+                      fallback: 'Tap to open this ${post.type}.',
+                      maxCharacters: 180,
+                      onTap: () => _openPost(context, post),
+                    ),
+                    PostStatsRow(
+                      reads: post.viewCount,
+                      likes: post.likesCount,
+                      comments: post.commentsCount,
+                      minutes: post.readingTime,
                     ),
                     const SizedBox(height: 12),
                     Row(

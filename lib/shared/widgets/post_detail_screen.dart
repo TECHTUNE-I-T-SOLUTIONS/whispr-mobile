@@ -49,61 +49,82 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 
   Future<void> _fetchPostDetails() async {
+    setState(() => _isLoading = true);
+    final apiService = ref.read(apiServiceProvider);
+
     try {
-      setState(() => _isLoading = true);
-      final apiService = ref.read(apiServiceProvider);
-      final postData = await apiService.get('/posts/${widget.postId}');
-      _post = Post.fromJson(Map<String, dynamic>.from(postData));
+      // The article, its comments and its reactions are independent requests.
+      // Running them together removes two serial round trips from every open.
+      final results = await Future.wait([
+        apiService.get('/posts/${widget.postId}'),
+        _safeGet('/comments?post_id=${widget.postId}'),
+        _safeGet('/reactions?post_id=${widget.postId}'),
+      ]);
 
-      // Fetch comments (if endpoint exists)
-      try {
-        final commentsResponse = await apiService.get('/comments?post_id=${widget.postId}');
-        final commentsData = commentsResponse['comments'] as List? ?? [];
-        _comments.clear();
-        _comments.addAll(commentsData.map((json) => Comment.fromJson(json)).toList());
-      } catch (e) {
-        debugPrint('Could not fetch comments: $e');
-      }
+      _post = Post.fromJson(Map<String, dynamic>.from(results[0] as Map));
 
-      // Fetch reactions
-      try {
-        final reactionsResponse = await apiService.get('/reactions?post_id=${widget.postId}');
-        final reactions = reactionsResponse['reactions'] as List? ?? [];
-        final userReaction = reactionsResponse['userReaction'];
+      final commentsData = (results[1] is Map ? (results[1] as Map)['comments'] : results[1]) as List? ?? [];
+      _comments
+        ..clear()
+        ..addAll(commentsData.whereType<Map>().map((e) => Comment.fromJson(Map<String, dynamic>.from(e))));
 
-        _likesCount = 0;
-        _hasLiked = false;
-        for (var reaction in reactions) {
-          if (reaction['type'] == 'like') {
-            _likesCount = reaction['count'];
-          }
-        }
-        _hasLiked = userReaction == 'like';
-      } catch (e) {
-        _likesCount = _post?.likesCount ?? 0;
-        debugPrint('Could not fetch reactions: $e');
-      }
+      _applyReactions(results[2]);
 
-      // Fetch suggested posts
-      try {
-        final feedService = ref.read(_feedServiceProvider);
-        final feed = await feedService.getFeed(forceRefresh: false);
-        final suggestions = feed
-            .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
-            .where((p) => p.id != widget.postId)
-            .take(5)
-            .toList();
-        _suggestedPosts = suggestions;
-      } catch (e) {
-        debugPrint('Could not fetch suggestions: $e');
-      }
-
+      if (!mounted) return;
       setState(() => _isLoading = false);
     } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      debugPrint('[PostDetail] failed to load ${widget.postId}: $e');
+      return;
+    }
+
+    // Suggestions are a "you might also like" strip — loading them after the
+    // article is visible makes the screen feel instant without hiding content.
+    _loadSuggestions();
+  }
+
+  Future<dynamic> _safeGet(String path) async {
+    try {
+      return await ref.read(apiServiceProvider).get(path);
+    } catch (e) {
+      debugPrint('[PostDetail] $path failed: $e');
+      return null;
+    }
+  }
+
+  void _applyReactions(dynamic response) {
+    _likesCount = _post?.likesCount ?? 0;
+    _hasLiked = false;
+    if (response is! Map) return;
+
+    final reactions = response['reactions'] as List? ?? const [];
+    var likes = 0;
+    for (final reaction in reactions) {
+      if (reaction is! Map) continue;
+      if (reaction['type'] == 'like') {
+        final count = reaction['count'];
+        likes += count is int ? count : 1;
+      }
+    }
+    if (likes > 0) _likesCount = likes;
+    _hasLiked = response['userReaction'] == 'like';
+  }
+
+  Future<void> _loadSuggestions() async {
+    try {
+      final feed = await ref.read(_feedServiceProvider).getFeed(forceRefresh: false);
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
-        _isLoading = false;
+        _suggestedPosts = feed
+            .whereType<Map>()
+            .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
+            .where((p) => p.id != widget.postId)
+            .take(3)
+            .toList();
       });
+    } catch (e) {
+      debugPrint('[PostDetail] suggestions failed: $e');
     }
   }
 

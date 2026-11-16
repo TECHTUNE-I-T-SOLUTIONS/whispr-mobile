@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
+import 'core/services/push_notification_service.dart';
 import 'core/services/session_manager.dart';
 import 'core/theme/app_theme.dart';
 import 'features/theme/theme_provider.dart';
@@ -16,13 +17,28 @@ void main() async {
   await dotenv.load(fileName: '.env', isOptional: true);
   await dotenv.load(fileName: '.env.local', isOptional: true);
 
-  // Initialize Supabase
   await Supabase.initialize(
     url: 'https://vkftywhuaxwbknlrymnr.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZnR5d2h1YXh3YmtubHJ5bW5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MDU4MzksImV4cCI6MjA2NjM4MTgzOX0.FSPBORGCJEQQAQKGC5c-VHAdt3Zlm1CQ1YexYuKDATY',
   );
 
-  // Push notifications removed for now
+  // Prepare the notification plugin before the first frame so a tap that
+  // launched the app can still be routed. Permission is asked later, from the
+  // home screen, once the user has seen what the app is for.
+  try {
+    await PushNotificationService().initialize();
+  } catch (e) {
+    debugPrint('[main] notification init failed: $e');
+  }
+
+  // Restore the stored session before the router exists. The redirect guard
+  // reads this flag in memory, so the first navigation is already correct and
+  // there is no login-screen flash for a returning user.
+  try {
+    await SessionManager().initializeSession();
+  } catch (e) {
+    debugPrint('[main] session init failed: $e');
+  }
 
   runApp(const ProviderScope(child: WhisprApp()));
 }
@@ -39,8 +55,6 @@ class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserv
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Session manager for handling session expiration checks
-    SessionManager().initializeSession();
   }
 
   @override
@@ -52,19 +66,11 @@ class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
-    switch (state) {
-      case AppLifecycleState.resumed:
-        // App came back to foreground, check session
-        SessionManager().checkAndHandleSessionExpiration();
-        SessionManager().updateSessionActivity();
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.inactive:
-        // App went to background
-        break;
+
+    if (state == AppLifecycleState.resumed) {
+      // Resuming only re-checks that the local session is still readable. It
+      // never signs the user out for being away — see SessionManager.
+      SessionManager().checkAndHandleSessionExpiration();
     }
   }
 
@@ -73,13 +79,23 @@ class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserv
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'Whispr - Share Your Stories',
+      title: 'Whispr',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        // Stop the OS from scaling body text past a readable ceiling; the old
+        // build let a 2x accessibility setting break card layouts.
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.35),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
-

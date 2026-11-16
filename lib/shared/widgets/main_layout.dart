@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 
+/// App shell: the bottom bar that holds the four primary destinations plus the
+/// composer, and the back-button policy.
+///
+/// What changed from the previous shell:
+///  * Four destinations and a raised compose button, instead of five tabs with
+///    "More" hiding the profile. Writing is now always one tap away.
+///  * No horizontal swipe between tabs. The old drag handler sat above every
+///    screen's scroll view, so a sideways flick on a horizontal list navigated
+///    away instead of scrolling it.
+///  * One shared `NavigationBar` with an animated indicator, instead of five
+///    hand-built animated containers each running their own shadow.
 class MainLayout extends StatefulWidget {
   final Widget child;
 
@@ -12,105 +24,91 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
+class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
   DateTime? _lastBackPress;
-  late AnimationController _animationController;
-  late List<Animation<double>> _iconAnimations;
   late final GoRouter _router;
 
-  final List<String> _routes = [
+  static const List<String> _routes = [
     '/home',
     '/chronicles',
     '/whispr-wall',
-    '/writing-chains',
     '/more',
   ];
 
-  final List<String> _labels = [
+  static const List<String> _labels = [
     'Home',
     'Chronicles',
-    'Whispr Wall',
-    'Writing Chains',
-    'More',
+    'Wall',
+    'Profile',
   ];
 
-  final List<IconData> _icons = [
-    Icons.home_outlined,
-    Icons.book_outlined,
-    Icons.forum_outlined,
-    Icons.link_outlined,
-    Icons.more_horiz_outlined,
+  static const List<(IconData, IconData)> _icons = [
+    (Icons.home_outlined, Icons.home_rounded),
+    (Icons.auto_stories_outlined, Icons.auto_stories_rounded),
+    (Icons.forum_outlined, Icons.forum_rounded),
+    (Icons.person_outline_rounded, Icons.person_rounded),
   ];
 
-  final List<IconData> _selectedIcons = [
-    Icons.home,
-    Icons.book,
-    Icons.forum,
-    Icons.link,
-    Icons.more_horiz,
+  /// Secondary destinations reachable from the home screen but not from the
+  /// bar. They still belong to the shell so the bar stays visible on them.
+  static const List<String> _secondaryRoutes = [
+    '/notifications',
+    '/games',
+    '/guides',
+    '/stories',
+    '/writing-chains',
+    '/spoken-words',
+    '/more',
   ];
 
   @override
   void initState() {
     super.initState();
     _router = GoRouter.of(context);
-    _animationController = AnimationController(
-      duration: AppTheme.mediumAnimation,
-      vsync: this,
-    );
-
-    _iconAnimations = List.generate(
-      _icons.length,
-      (index) => Tween<double>(begin: 1.0, end: 1.2).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.easeInOut,
-        ),
-      ),
-    );
-
-    _updateSelectedIndexFromRoute();
-
-    // Listen to route changes
+    _syncIndex();
     _router.routerDelegate.addListener(_onRouteChanged);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _updateSelectedIndexFromRoute();
-  }
-
-  void _updateSelectedIndexFromRoute() {
-    final location = _router.routerDelegate.currentConfiguration.uri.toString();
-    final index = _routes.indexWhere((route) => location.startsWith(route));
-    if (index != -1 && index != _selectedIndex) {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
-  }
-
-  void _onRouteChanged() {
-    _updateSelectedIndexFromRoute();
+    _syncIndex();
   }
 
   @override
   void dispose() {
     _router.routerDelegate.removeListener(_onRouteChanged);
-    _animationController.dispose();
     super.dispose();
   }
 
-  void _onItemTapped(int index) {
-    if (_selectedIndex != index) {
-      setState(() {
-        _selectedIndex = index;
-      });
-      _animationController.forward(from: 0.0);
-      context.go(_routes[index]);
+  void _syncIndex() {
+    final location = _router.routerDelegate.currentConfiguration.uri.path;
+
+    // Check the primary routes first so `/chronicles/create` still highlights
+    // the Chronicles tab rather than falling through to a secondary route.
+    var index = _routes.indexWhere((route) => location == route || location.startsWith('$route/'));
+    if (index == -1) {
+      // Secondary route: keep whichever primary tab the user came from, so the
+      // bar does not visually jump. Default to Home.
+      index = _selectedIndex;
     }
+    if (index != _selectedIndex && mounted) {
+      setState(() => _selectedIndex = index);
+    }
+  }
+
+  void _onRouteChanged() => _syncIndex();
+
+  void _onItemTapped(int index) {
+    if (_selectedIndex == index) {
+      // Tapping the current tab returns it to its root.
+      context.go(_routes[index]);
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() => _selectedIndex = index);
+    context.go(_routes[index]);
   }
 
   @override
@@ -132,65 +130,51 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
         final now = DateTime.now();
         final shouldExit = _lastBackPress != null && now.difference(_lastBackPress!) < const Duration(seconds: 2);
         _lastBackPress = now;
-        if (shouldExit) {
-          context.go('/home');
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Press back again to exit')),
-          );
+        if (!shouldExit && mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Press back again to leave Whispr'),
+                duration: Duration(seconds: 2),
+              ),
+            );
         }
       },
-      child: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          final velocity = details.primaryVelocity ?? 0;
-          if (velocity.abs() < 200) return;
-          if (velocity < 0 && _selectedIndex < _routes.length - 1) {
-            _onItemTapped(_selectedIndex + 1);
-          } else if (velocity > 0 && _selectedIndex > 0) {
-            _onItemTapped(_selectedIndex - 1);
-          }
-        },
-        child: Scaffold(
-          body: widget.child,
-          bottomNavigationBar: Container(
-            height: 86,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Scaffold(
+        body: widget.child,
+        extendBody: true,
+        bottomNavigationBar: SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+          child: Container(
+            height: 66,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [
-                        const Color(0xFF1A1A1A).withValues(alpha: 0.8),
-                        const Color(0xFF2A2A2A).withValues(alpha: 0.6),
-                      ]
-                    : [
-                        Colors.white.withValues(alpha: 0.8),
-                        const Color(0xFFF8F9FA).withValues(alpha: 0.6),
-                      ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+              color: isDark
+                  ? const Color(0xFF141414).withValues(alpha: 0.97)
+                  : Colors.white.withValues(alpha: 0.97),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.07)
+                    : Colors.black.withValues(alpha: 0.06),
               ),
-              borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                  spreadRadius: 2,
+                  color: Colors.black.withValues(alpha: isDark ? 0.42 : 0.08),
+                  blurRadius: 22,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(25),
-              child: SafeArea(
-                top: false,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: List.generate(
-                    _icons.length,
-                    (index) => _buildNavItem(index),
-                  ),
-                ),
-              ),
+            child: Row(
+              children: [
+                _navItem(0, isDark),
+                _navItem(1, isDark),
+                _composeButton(isDark),
+                _navItem(2, isDark),
+                _navItem(3, isDark),
+              ],
             ),
           ),
         ),
@@ -198,81 +182,93 @@ class _MainLayoutState extends State<MainLayout> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildNavItem(int index) {
-    final isSelected = _selectedIndex == index;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: () => _onItemTapped(index),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: AppTheme.mediumAnimation,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: isDark
-                      ? [
-                          AppTheme.primaryColor.withValues(alpha: 0.3),
-                          AppTheme.primaryColor.withValues(alpha: 0.1),
-                        ]
-                      : [
-                          AppTheme.primaryColor.withValues(alpha: 0.2),
-                          AppTheme.primaryColor.withValues(alpha: 0.05),
-                        ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isSelected
-              ? [
+  Widget _composeButton(bool isDark) {
+    return Expanded(
+      child: Center(
+        child: Semantics(
+          button: true,
+          label: 'Write something new',
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              context.push('/chronicles/create');
+            },
+            child: Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppTheme.primaryLight, AppTheme.primaryColor],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.4),
-                    blurRadius: 15,
-                    spreadRadius: 2,
+                    color: AppTheme.primaryColor.withValues(alpha: 0.42),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
                   ),
-                ]
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedBuilder(
-              animation: _iconAnimations[index],
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: isSelected ? _iconAnimations[index].value : 1.0,
-                  child: Icon(
-                    isSelected ? _selectedIcons[index] : _icons[index],
-                    color: isSelected
-                        ? AppTheme.primaryColor
-                        : (isDark
-                            ? Colors.white70
-                            : Colors.black54),
-                    size: isSelected ? 26 : 22,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 2),
-            AnimatedDefaultTextStyle(
-              duration: AppTheme.shortAnimation,
-              style: TextStyle(
-                color: isSelected
-                    ? AppTheme.primaryColor
-                    : (isDark
-                        ? Colors.white60
-                        : Colors.black45),
-                fontSize: isSelected ? 11 : 9,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                letterSpacing: 0.2,
+                ],
               ),
-              child: Text(_labels[index]),
+              child: const Icon(Icons.edit_rounded, color: Colors.white, size: 21),
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem(int index, bool isDark) {
+    final isSelected = _selectedIndex == index;
+    final (outline, filled) = _icons[index];
+    final activeColor = isDark ? Colors.white : AppTheme.primaryColor;
+    final inactiveColor = isDark ? Colors.white38 : Colors.black38;
+
+    return Expanded(
+      child: Semantics(
+        selected: isSelected,
+        button: true,
+        label: _labels[index],
+        child: InkWell(
+          onTap: () => _onItemTapped(index),
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: AppTheme.shortAnimation,
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: isDark ? 0.22 : 0.1)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Icon(
+                  isSelected ? filled : outline,
+                  size: 21,
+                  color: isSelected ? activeColor : inactiveColor,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _labels[index],
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                  letterSpacing: 0.1,
+                  color: isSelected ? activeColor : inactiveColor,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+/// Exposed for tests and for screens that want the shell's secondary routes.
+const List<String> kShellSecondaryRoutes = _MainLayoutState._secondaryRoutes;

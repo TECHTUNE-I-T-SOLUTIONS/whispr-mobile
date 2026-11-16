@@ -50,90 +50,94 @@ class _ChroniclesPostDetailScreenState extends ConsumerState<ChroniclesPostDetai
   }
 
   Future<void> _fetchChronicleDetails() async {
+    setState(() => _isLoading = true);
+    final apiService = ref.read(apiServiceProvider);
+
     try {
-      setState(() => _isLoading = true);
-      final postData = await ref.read(_chroniclesServiceProvider).getPost(widget.postId, isSlug: widget.isSlug);
+      // Post, comments and reactions are independent — firing them together
+      // turns three serial network round trips into one. The post itself is
+      // the only one that can fail the whole screen; the other two degrade to
+      // empty state so a comments hiccup never hides the article.
+      final results = await Future.wait([
+        ref.read(_chroniclesServiceProvider).getPost(widget.postId, isSlug: widget.isSlug),
+        _safeGet(apiService, '/chronicles/posts/${widget.postId}/comments'),
+        _safeGet(apiService, '/chronicles/posts/${widget.postId}/reactions'),
+      ]);
+
+      final postData = results[0] as Map<String, dynamic>;
       _post = Post.fromJson(postData);
-      final apiService = ref.read(apiServiceProvider);
+      _comments = _parseComments(results[1]);
+      _commentsCount = _comments.isNotEmpty ? _comments.length : (_post?.commentsCount ?? 0);
+      _applyReactions(results[2]);
 
-      // Fetch comments for chronicles posts
-      try {
-        final commentsResponse = await apiService.get(
-          '/chronicles/posts/${widget.postId}/comments',
-        );
-        debugPrint('Fetched comments response: ${commentsResponse.runtimeType} - $commentsResponse');
-        
-        List? commentsList;
-        int? fetchedTotal;
-        
-        if (commentsResponse is Map<String, dynamic>) {
-          commentsList = commentsResponse['comments'] as List?;
-          fetchedTotal = commentsResponse['total'] as int?;
-          debugPrint('API Response - Comments: ${commentsList?.length}, Total: $fetchedTotal');
-        } else if (commentsResponse is List) {
-          commentsList = commentsResponse;
-          debugPrint('Comments list directly: ${commentsList.length}');
-        }
-        
-        if (commentsList != null && commentsList.isNotEmpty) {
-          _comments = List<Map<String, dynamic>>.from(
-            commentsList.map((e) {
-              if (e is Map) {
-                return Map<String, dynamic>.from(e);
-              }
-              return <String, dynamic>{};
-            }).where((e) => e.isNotEmpty)
-          );
-        } else {
-          _comments = [];
-        }
-        
-        // Update the comments count
-        _commentsCount = _comments.length;
-        debugPrint('INFO: Loaded $_commentsCount comments for post ${widget.postId}');
-
-        // Fetch comment reactions for each comment
-        if (_comments.isNotEmpty) {
-          await _fetchCommentReactions();
-        }
-      } catch (e) {
-        debugPrint('ERROR fetching comments: $e');
-        // Fallback to post's comments count if available
-        _commentsCount = _post?.commentsCount ?? 0;
-        _comments = [];
-      }
-
-      // Fetch reactions for chronicles posts
-      try {
-        final reactionsResponse = await apiService.get(
-          '/chronicles/posts/${widget.postId}/reactions',
-        );
-        final reactions = reactionsResponse['reactions'] as List?;
-        final userReaction = reactionsResponse['userReaction'];
-
-        _likesCount = 0;
-        _hasLiked = false;
-        
-        if (reactions != null) {
-          for (var reaction in reactions) {
-            if (reaction['type'] == 'like' || reaction['reaction_type'] == 'like') {
-              _likesCount = reaction['count'] ?? reactions.where((r) => r['reaction_type'] == 'like').length ?? 0;
-            }
-          }
-        }
-        _hasLiked = userReaction == 'like';
-      } catch (e) {
-        debugPrint('Could not fetch reactions: $e');
-        _likesCount = _post?.likesCount ?? 0;
-      }
-
+      if (!mounted) return;
       setState(() => _isLoading = false);
+
+      // Per-comment reactions are a second fan-out and are not needed to show
+      // the article, so they land afterwards without blocking the screen.
+      if (_comments.isNotEmpty) {
+        _fetchCommentReactions().catchError((e) {
+          debugPrint('[ChroniclesDetail] comment reactions failed: $e');
+        });
+      }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
       });
       debugPrint('Error fetching chronicle details: $e');
+    }
+  }
+
+  /// Returns null instead of throwing, for endpoints the screen can live without.
+  Future<dynamic> _safeGet(ApiService api, String path) async {
+    try {
+      return await api.get(path);
+    } catch (e) {
+      debugPrint('[ChroniclesDetail] $path failed: $e');
+      return null;
+    }
+  }
+
+  List<Map<String, dynamic>> _parseComments(dynamic response) {
+    List? list;
+    if (response is Map<String, dynamic>) {
+      list = response['comments'] as List?;
+    } else if (response is List) {
+      list = response;
+    }
+    if (list == null || list.isEmpty) return [];
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  void _applyReactions(dynamic response) {
+    _likesCount = _post?.likesCount ?? 0;
+    _hasLiked = false;
+    if (response == null) return;
+
+    try {
+      final map = response is Map<String, dynamic> ? response : <String, dynamic>{};
+      final reactions = map['reactions'] as List?;
+      if (reactions != null) {
+        var likes = 0;
+        for (final reaction in reactions) {
+          if (reaction is! Map) continue;
+          final type = (reaction['type'] ?? reaction['reaction_type'] ?? '').toString();
+          if (type == 'like') {
+            final count = reaction['count'];
+            likes += count is int ? count : 1;
+          }
+        }
+        if (likes > 0) _likesCount = likes;
+      }
+      _hasLiked = map['userReaction'] == 'like';
+    } catch (e) {
+      debugPrint('[ChroniclesDetail] could not parse reactions: $e');
     }
   }
 
