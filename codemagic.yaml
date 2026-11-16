@@ -1,10 +1,11 @@
 workflows:
   android-release:
     name: Whispr Mobile - Android Release
-    # "linux" is the standard machine included in Codemagic's free plan.
-    # linux_x2 and above are paid-only and the build fails immediately with
-    # "The selected instance type is not available with the current billing plan."
-    instance_type: linux
+    # mac_mini_m2 is the machine this account's plan actually includes - every
+    # successful build of this app has used it. Linux machines (linux, linux_x2)
+    # are rejected at startup with "The selected instance type is not available
+    # with the current billing plan."
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       flutter: 3.41.5
