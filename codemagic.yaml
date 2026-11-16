@@ -13,14 +13,26 @@ workflows:
       groups:
         # App / API environment variables (unchanged set).
         - whisprmobile
-        # Android signing. Required for a Play-Store-valid build:
-        #   ANDROID_KEYSTORE_BASE64  base64 of whispr-release.jks
-        #   KEYSTORE_PASSWORD        keystore (store) password
-        #   KEY_ALIAS                key alias inside the keystore
-        #   KEY_PASSWORD             password for that key alias
-        # If this group is absent the build still runs but falls back to
-        # debug signing, which Google Play will reject.
-        - whispr_android_signing
+        # Android release signing is NOT referenced here yet.
+        #
+        # Codemagic validates variable groups statically: naming a group that
+        # does not exist fails the whole build before any step runs, with
+        # "Codemagic.yaml references to unknown variable group(s)". So the
+        # group is added back only once it actually exists in the account.
+        #
+        # To enable release signing:
+        #   1. Codemagic -> app -> Environment variables -> create a group
+        #      named exactly whispr_android_signing with these four variables:
+        #        ANDROID_KEYSTORE_BASE64  base64 of whispr-release.jks (secure)
+        #        KEYSTORE_PASSWORD        keystore (store) password   (secure)
+        #        KEY_ALIAS                key alias inside the keystore
+        #        KEY_PASSWORD             password for that key alias (secure)
+        #   2. Add "- whispr_android_signing" to the groups list above.
+        #
+        # Until then the "Decode release keystore" step sees an empty
+        # ANDROID_KEYSTORE_BASE64, prints a warning and skips, and Gradle
+        # falls back to debug keys. The APK installs and runs on a device, but
+        # Google Play will reject it.
       vars:
         PACKAGE_NAME: "com.whisprwords.app"
     cache:
