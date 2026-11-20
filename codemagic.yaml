@@ -158,7 +158,9 @@ workflows:
           export PATH="$HOME/.shorebird/bin:$PATH"
           echo 'export PATH="$HOME/.shorebird/bin:$PATH"' >> "$CM_ENV"
           shorebird --version
-          shorebird account whoami
+          # Do NOT call "shorebird account whoami" here: it is a human-only
+          # route and returns service_account_forbidden in CI. The release
+          # command below authenticates with SHOREBIRD_TOKEN and validates it.
 
           # Only one Android release is allowed per version. The APK is
           # what GitHub users install, so Shorebird builds that one and
