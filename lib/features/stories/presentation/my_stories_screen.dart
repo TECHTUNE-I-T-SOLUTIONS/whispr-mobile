@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
 import '../../auth/auth_state.dart';
+import '../../../core/constants/layout.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
   return StoriesService(Supabase.instance.client);
@@ -189,7 +190,7 @@ class _MyStoriesScreenState extends ConsumerState<MyStoriesScreen> {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, kBottomNavClearance),
                       itemCount: _myStories.length,
                       itemBuilder: (context, index) {
                         final story = _myStories[index];

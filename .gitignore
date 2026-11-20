@@ -96,6 +96,14 @@ docs/api/
 # Local development
 .local/
 
+# Local probe/debug artifacts (never commit)
+_probe/
+.notif-dump.txt
+screen-check.png
+verify-nav.png
+scripts/_patch_*.py
+*.code-workspace
+
 # IDE
 .vscode/settings.json
 .idea/

@@ -6,6 +6,7 @@ import '../../../core/network/api_service.dart';
 import '../../../core/services/notifications_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/auth_state.dart';
+import '../../../core/constants/layout.dart';
 
 final _notificationsServiceProvider = Provider((ref) => NotificationsService(ApiService.instance));
 
@@ -27,14 +28,41 @@ class NotificationItem {
   });
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    // The API returns `created_at` / `read`; older payloads used
+    // `timestamp` / `isRead`, so accept both.
+    final rawDate = json['created_at'] ?? json['timestamp'];
+    final rawRead = json['read'] ?? json['isRead'];
     return NotificationItem(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      message: json['message'] ?? '',
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
-      isRead: json['isRead'] ?? false,
-      type: json['type'] ?? 'system',
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      message: (json['message'] ?? json['body'] ?? '').toString(),
+      timestamp: rawDate is String
+          ? (DateTime.tryParse(rawDate)?.toLocal() ?? DateTime.now())
+          : DateTime.now(),
+      isRead: rawRead == true,
+      type: _normalizeType((json['type'] ?? 'system').toString()),
     );
+  }
+
+  /// Server types are granular (`post_liked`, `follower_joined`, ...); the UI
+  /// only styles a handful of buckets.
+  static String _normalizeType(String raw) {
+    switch (raw) {
+      case 'post_liked':
+        return 'like';
+      case 'post_commented':
+      case 'comment_reply':
+        return 'comment';
+      case 'follower_joined':
+        return 'follow';
+      case 'post_shared':
+        return 'share';
+      case 'badge_earned':
+      case 'streak_milestone':
+        return 'achievement';
+      default:
+        return raw;
+    }
   }
 
   IconData get icon {
@@ -45,6 +73,10 @@ class NotificationItem {
         return Icons.comment;
       case 'follow':
         return Icons.person_add;
+      case 'share':
+        return Icons.share;
+      case 'achievement':
+        return Icons.emoji_events;
       default:
         return Icons.notifications;
     }
@@ -58,6 +90,10 @@ class NotificationItem {
         return Colors.blue;
       case 'follow':
         return Colors.green;
+      case 'share':
+        return Colors.purple;
+      case 'achievement':
+        return Colors.amber;
       default:
         return Colors.grey;
     }
@@ -242,7 +278,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return RefreshIndicator(
       onRefresh: _fetchNotifications,
       child: ListView.builder(
-        padding: const EdgeInsets.all(AppTheme.spacingS),
+        padding: const EdgeInsets.fromLTRB(AppTheme.spacingS, AppTheme.spacingS, AppTheme.spacingS, kBottomNavClearance),
         itemCount: _notifications.length,
         itemBuilder: (context, index) {
           final notification = _notifications[index];

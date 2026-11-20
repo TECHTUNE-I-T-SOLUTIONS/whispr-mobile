@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/services/games_progress_service.dart';
 import '../../../core/services/games_service.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/constants/layout.dart';
 
 class GuidesScreen extends StatefulWidget {
   const GuidesScreen({super.key});
@@ -166,7 +167,7 @@ class _GuidesScreenState extends State<GuidesScreen> {
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, kBottomNavClearance),
                 children: [
                 Container(
                   padding: const EdgeInsets.all(20),

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/stories_service.dart';
+import '../../../core/constants/layout.dart';
+import '../../auth/auth_state.dart';
 
 final storiesServiceProvider = Provider<StoriesService>((ref) {
   return StoriesService(Supabase.instance.client);
@@ -80,13 +84,13 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
     final story = _storyData?['story'];
     if (story == null) return;
 
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
     final service = ref.read(storiesServiceProvider);
+    final userId = service.currentUserId;
+    if (userId == null) return;
+
     final isLiked = await service.getStoryLikeStatus(
       story['id'],
-      user.id,
+      userId,
       story['author_type'],
     );
     if (mounted) {
@@ -98,21 +102,31 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
     final story = _storyData?['story'];
     if (story == null) return;
 
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
+    final service = ref.read(storiesServiceProvider);
+    final userId = service.currentUserId;
+    if (userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please log in to like stories')),
       );
       return;
     }
 
-    final service = ref.read(storiesServiceProvider);
     setState(() => _isLiked = !_isLiked);
 
-    if (_isLiked) {
-      await service.likeStory(story['id'], user.id, story['author_type']);
-    } else {
-      await service.unlikeStory(story['id'], user.id, story['author_type']);
+    try {
+      if (_isLiked) {
+        await service.likeStory(story['id'], userId, story['author_type']);
+      } else {
+        await service.unlikeStory(story['id'], userId, story['author_type']);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLiked = !_isLiked);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update like: $e')),
+        );
+      }
+      return;
     }
 
     // Reload story to get updated counts
@@ -171,13 +185,28 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
           else if (_chapters.isNotEmpty)
             SliverToBoxAdapter(child: _buildChapterList()),
           SliverToBoxAdapter(child: _buildCommentsSection(story)),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          const SliverToBoxAdapter(child: SizedBox(height: kBottomNavClearance)),
         ],
       ),
     );
   }
 
   Widget _buildStoryHeader(Map<String, dynamic> story) {
+    // The view exposes `author_avatar`, but older rows only carry the raw
+    // profile image, so fall back to it before showing an initial.
+    final avatarUrl = (story['author_avatar'] ??
+            story['profile_image_url'] ??
+            story['creator_avatar'])
+        ?.toString();
+    final authorName = (story['author_name'] ??
+            story['pen_name'] ??
+            story['author_username'] ??
+            'Unknown')
+        .toString();
+    final initial = authorName.trim().isEmpty
+        ? 'U'
+        : authorName.trim().characters.first.toUpperCase();
+
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -219,12 +248,11 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: story['author_avatar'] != null
-                    ? NetworkImage(story['author_avatar'])
-                    : null,
-                child: story['author_avatar'] == null
+                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                child: avatarUrl == null
                     ? Text(
-                        (story['author_name'] ?? 'U')[0].toUpperCase(),
+                        initial,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       )
                     : null,
@@ -235,7 +263,7 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      story['author_name'] ?? 'Unknown',
+                      authorName,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
@@ -382,11 +410,34 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
     context.push('/stories/${widget.storySlug}/chapter/${chapter['slug']}');
   }
 
-  void _shareStory(Map<String, dynamic> story) {
-    // Implement share functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share functionality coming soon')),
-    );
+  Future<void> _shareStory(Map<String, dynamic> story) async {
+    final slug = story['slug'] ?? widget.storySlug;
+    final url = 'https://www.whisprwords.com/stories/$slug';
+    final title = (story['title'] ?? 'A story on Whispr').toString();
+    final text = '$title — read it on Whispr';
+
+    try {
+      await Share.share(
+        '$text\n$url',
+        subject: title,
+        sharePositionOrigin: _shareOrigin(),
+      );
+    } catch (_) {
+      // Fall back to the clipboard when no share sheet is available.
+      await Clipboard.setData(ClipboardData(text: '$text\n$url'));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Link copied to clipboard')),
+        );
+      }
+    }
+  }
+
+  /// iPad needs an anchor rect for the share sheet.
+  Rect? _shareOrigin() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
   }
 
   void _showCommentDialog(Map<String, dynamic> story) {
@@ -412,6 +463,10 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
             onPressed: () async {
               if (controller.text.trim().isEmpty) return;
               
+              // Prefer the app's own session: Supabase's `currentUser` is null
+              // whenever the Supabase session could not be restored, which made
+              // signed-in readers post comments as "Anonymous".
+              final appUser = ref.read(authStateProvider).user;
               final user = Supabase.instance.client.auth.currentUser;
               final service = ref.read(storiesServiceProvider);
               final navigator = Navigator.of(context);
@@ -420,10 +475,14 @@ class _StoryDetailScreenState extends ConsumerState<StoryDetailScreen> {
               try {
                 await service.addStoryComment(
                   storyId: story['id'],
-                  commenterName: user?.userMetadata?['full_name'] ?? 'Anonymous',
+                  commenterName: (appUser?.displayName.isNotEmpty ?? false)
+                      ? appUser!.displayName
+                      : (appUser?.penName.isNotEmpty ?? false)
+                          ? appUser!.penName
+                          : user?.userMetadata?['full_name'] ?? 'Anonymous',
                   content: controller.text.trim(),
                   authorType: story['author_type'],
-                  userId: user?.id,
+                  userId: appUser?.id ?? user?.id,
                 );
                 if (mounted) {
                   navigator.pop();

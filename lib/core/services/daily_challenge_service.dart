@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../network/api_service.dart';
+
 /// One day's writing prompt.
 class DailyChallenge {
   final String id;
@@ -10,6 +12,14 @@ class DailyChallenge {
   final int wordTarget;
   final int xp;
 
+  /// Server id of today's prompt, when it came from the daily challenge the
+  /// cron job creates. Null for the local fallback prompt.
+  final String? remoteId;
+  final String? description;
+  final String? imageUrl;
+  final String? prizeDescription;
+  final bool isRemote;
+
   const DailyChallenge({
     required this.id,
     required this.prompt,
@@ -17,6 +27,11 @@ class DailyChallenge {
     required this.form,
     required this.wordTarget,
     required this.xp,
+    this.remoteId,
+    this.description,
+    this.imageUrl,
+    this.prizeDescription,
+    this.isRemote = false,
   });
 }
 
@@ -113,7 +128,7 @@ class DailyChallengeService {
         .inDays;
     final p = _prompts[dayOfYear % _prompts.length];
     return DailyChallenge(
-      id: '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      id: _dateKey(date),
       prompt: p.prompt,
       kicker: p.kicker,
       form: p.form,
@@ -124,7 +139,11 @@ class DailyChallengeService {
 
   Future<DailyChallengeState> load({DateTime? now}) async {
     final today = now ?? DateTime.now();
-    final challenge = challengeFor(today);
+    // Prefer the live challenge the cron job publishes for today, so the app
+    // shows the same prompt as the web. Fall back to the bundled prompt when
+    // the device is offline or no active daily challenge exists.
+    final remote = await _fetchTodayFromServer(today);
+    final challenge = remote ?? challengeFor(today);
     final prefs = await SharedPreferences.getInstance();
 
     final completed = prefs.getStringList(_completedDatesKey) ?? const [];
@@ -167,6 +186,95 @@ class DailyChallengeService {
 
     debugPrint('[DailyChallenge] completed ${challenge.id}, streak=$streak');
     return load(now: today);
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  String _formLabel(String promptType) {
+    switch (promptType.toLowerCase()) {
+      case 'poem':
+        return 'Poetry';
+      case 'story':
+        return 'Story';
+      case 'blog':
+        return 'Blog';
+      default:
+        return 'Writing';
+    }
+  }
+
+  int _wordTargetFor(String promptType) {
+    switch (promptType.toLowerCase()) {
+      case 'poem':
+        return 60;
+      case 'story':
+        return 150;
+      case 'blog':
+        return 200;
+      default:
+        return 100;
+    }
+  }
+
+  /// Today's active daily challenge, as created by the cron job.
+  ///
+  /// Returns null on any failure so the caller can fall back to the bundled
+  /// prompt — a network blip must never leave the home screen without a
+  /// challenge.
+  Future<DailyChallenge?> _fetchTodayFromServer(DateTime today) async {
+    try {
+      final response = await ApiService.instance.get(
+        '/chronicles/writing-prompts',
+        queryParameters: {
+          'status': 'active',
+          'challenge_type': 'daily',
+          'limit': 10,
+        },
+      );
+
+      final prompts = (response['prompts'] as List?) ?? const [];
+      if (prompts.isEmpty) return null;
+
+      Map<String, dynamic>? pick;
+      for (final raw in prompts) {
+        if (raw is! Map) continue;
+        final map = Map<String, dynamic>.from(raw);
+        final starts = DateTime.tryParse(map['starts_at']?.toString() ?? '')?.toLocal();
+        if (starts != null &&
+            starts.year == today.year &&
+            starts.month == today.month &&
+            starts.day == today.day) {
+          pick = map;
+          break;
+        }
+      }
+      pick ??= Map<String, dynamic>.from(prompts.first as Map);
+
+      final content =
+          (pick['content'] ?? pick['description'] ?? '').toString().trim();
+      if (content.isEmpty) return null;
+
+      final promptType = (pick['prompt_type'] ?? 'writing').toString();
+      final words = _wordTargetFor(promptType);
+
+      return DailyChallenge(
+        id: _dateKey(today),
+        prompt: content,
+        kicker: (pick['title'] ?? "Today's challenge").toString(),
+        form: _formLabel(promptType),
+        wordTarget: words,
+        xp: 10 + (words ~/ 20) * 5,
+        remoteId: pick['id']?.toString(),
+        description: pick['description']?.toString(),
+        imageUrl: pick['featured_image_url']?.toString(),
+        prizeDescription: pick['prize_description']?.toString(),
+        isRemote: true,
+      );
+    } catch (e) {
+      debugPrint('[DailyChallenge] remote fetch failed, using local prompt: $e');
+      return null;
+    }
   }
 
   /// Counts consecutive days ending today (or yesterday, so the streak still

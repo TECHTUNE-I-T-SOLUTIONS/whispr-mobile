@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/layout.dart';
 import '../../core/theme/app_theme.dart';
 
 /// Shared building blocks for the creator tools (new story, new post, new
@@ -224,7 +225,7 @@ class CreatorForm {
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom * 0.4),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + kShellFabClearance + MediaQuery.of(context).padding.bottom * 0.4),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF121010) : Colors.white,
         border: Border(

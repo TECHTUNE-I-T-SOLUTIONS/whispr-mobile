@@ -5,6 +5,7 @@ import '../../../core/models/post.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/auth_state.dart';
+import '../../../core/constants/layout.dart';
 
 class WhisprWallScreen extends ConsumerStatefulWidget {
   const WhisprWallScreen({super.key});
@@ -295,22 +296,25 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
         ],
       ),
       body: _buildContent(),
-      floatingActionButton: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.elasticOut,
-        builder: (context, value, child) {
-          return Transform.scale(
-            scale: value,
-            child: FloatingActionButton.extended(
-              onPressed: () => _showPostDialog(),
-              backgroundColor: AppTheme.primaryColor,
-              elevation: 8,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Share Thought', style: TextStyle(color: Colors.white)),
-            ),
-          );
-        },
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(bottom: kShellFabClearance),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: FloatingActionButton.extended(
+                onPressed: () => _showPostDialog(),
+                backgroundColor: AppTheme.primaryColor,
+                elevation: 8,
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('Share Thought', style: TextStyle(color: Colors.white)),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -426,7 +430,7 @@ class _WhisprWallScreenState extends ConsumerState<WhisprWallScreen> with Ticker
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, kBottomNavClearance),
       itemCount: _posts.length,
       itemBuilder: (context, index) {
         final post = _posts[index];

@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/post.dart';
@@ -16,6 +15,7 @@ import '../../auth/supabase_auth_provider.dart';
 import '../widgets/daily_challenge_card.dart';
 import '../widgets/gated_preview.dart';
 import '../widgets/notification_prompt.dart';
+import '../../../core/constants/layout.dart';
 
 final _feedServiceProvider = Provider((ref) => FeedService(ApiService.instance, ContentCacheService()));
 final _chainsServiceProvider = Provider((ref) => ChainsService(ApiService.instance, ContentCacheService()));
@@ -30,7 +30,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final PageController _pageController = PageController();
-  final CarouselSliderController _carouselController = CarouselSliderController();
   int _tabIndex = 0;
   List<Post> _adminPosts = [];
   List<Post> _chroniclePosts = [];
@@ -119,13 +118,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(child: _topSection(context)),
-              SliverToBoxAdapter(child: _featureCarousel(context)),
               SliverToBoxAdapter(child: _tabBar()),
               // The tabbed body must size to its content. The old code wrapped
               // a PageView in SliverFillRemaining, which forced every tab to
               // exactly one screen and clipped the rest.
               _tabIndex == 3 ? _gamesSliver(context) : _feedSliver(context),
-              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+              const SliverToBoxAdapter(child: SizedBox(height: kBottomNavClearance)),
             ],
           ),
         ),
@@ -244,7 +242,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _iconAction(
                 icon: Icons.search_rounded,
                 tooltip: 'Explore',
-                onTap: () => context.go('/chronicles'),
+                onTap: () => context.go('/search'),
               ),
               const SizedBox(width: 4),
               _iconAction(
@@ -332,32 +330,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Feature carousel — kept, trimmed to posts that actually have a cover.
-  // ---------------------------------------------------------------------------
-
-  Widget _featureCarousel(BuildContext context) {
-    final posts = _adminPosts.where((p) => p.coverImage != null).take(5).toList();
-    if (posts.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: CarouselSlider(
-        carouselController: _carouselController,
-        options: CarouselOptions(
-          height: 208,
-          viewportFraction: 0.86,
-          enlargeCenterPage: true,
-          enlargeFactor: 0.12,
-          enableInfiniteScroll: posts.length > 2,
-          padEnds: false,
-          onPageChanged: (index, reason) {},
-        ),
-        items: posts.map((post) => _heroCard(context, post)).toList(),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
   // Tabs
   // ---------------------------------------------------------------------------
 
@@ -434,8 +406,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _horizontalPosts(context, _adminPosts.take(5).toList()),
         ],
         if (_chroniclePosts.isNotEmpty) ...[
-          _sectionHeader(context, 'Creator chronicles', 'Stories and writing from the community'),
+          _sectionHeader(context, 'Featured chronicles', 'Blogs, poems and stories from Whispr creators'),
           _horizontalPosts(context, _chroniclePosts.take(5).toList()),
+ _actionCard(
+ context,
+ 'Browse by category',
+ 'Every chronicle arranged by the world it belongs to',
+ Icons.category_outlined,
+ () => context.push('/chronicles/categories'),
+ ),
         ],
         if (_chains.isNotEmpty) ...[
           _sectionHeader(context, 'Writing chains', 'Active collaboration stories'),

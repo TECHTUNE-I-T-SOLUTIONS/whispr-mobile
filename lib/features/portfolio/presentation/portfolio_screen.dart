@@ -11,6 +11,7 @@ import '../../../core/services/content_cache_service.dart';
 import '../../../core/services/creator_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../home/widgets/gated_preview.dart';
+import '../../../core/constants/layout.dart';
 
 final _creatorServiceProvider = Provider(
   (ref) => CreatorService(ApiService.instance, ContentCacheService()),
@@ -136,7 +137,7 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
             : _error != null
                 ? _errorState()
                 : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, kBottomNavClearance),
                     children: [
                       _header(),
                       const SizedBox(height: 16),
@@ -207,7 +208,16 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
 
   Widget _header() {
     final creator = _creator ?? const {};
-    final avatar = (creator['profile_image_url'] ?? creator['avatar_url'] ?? '').toString();
+    // `/chronicles/creators/:id` — the endpoint this screen resolves through —
+    // names the field `profile_picture_url`, while `/creator/profile` uses
+    // `profile_image_url`. Reading only the first name left the avatar empty
+    // and the header fell back to the pen name's initial.
+    final avatar = (creator['profile_picture_url'] ??
+            creator['profile_image_url'] ??
+            creator['avatar_url'] ??
+            creator['profileImageUrl'] ??
+            '')
+        .toString();
     final penName = (creator['pen_name'] ?? widget.penName).toString();
     final joined = _memberSince();
 

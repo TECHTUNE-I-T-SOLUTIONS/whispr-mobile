@@ -7,6 +7,8 @@ import '../../../core/models/post.dart';
 import '../../../core/services/chronicles_service.dart';
 import '../../../core/services/content_cache_service.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/constants/layout.dart';
+import '../../auth/auth_state.dart';
 
 final _chroniclesServiceProvider = Provider((ref) => ChroniclesService(ApiService.instance, ContentCacheService()));
 
@@ -38,7 +40,8 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
       if (!mounted) return;
       setState(() {
         _posts = data.map((e) => Post.fromJson(Map<String, dynamic>.from(e))).toList();
-        _myPosts = mine.map((e) => Post.fromJson(Map<String, dynamic>.from(e))).toList();
+        _myPosts =
+            mine.map((e) => _withSelfAuthor(Post.fromJson(Map<String, dynamic>.from(e)))).toList();
         _loading = false;
       });
     } catch (_) {
@@ -47,6 +50,29 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Fills in the author of one of *my* chronicles.
+  ///
+  /// `/chronicles/creator/posts` did not return an author, so every one of the
+  /// user's own posts rendered as "Anonymous" next to their own name in the
+  /// list. The server sends it now, but keep this fallback: the signed-in
+  /// creator is known locally, so the card never has to say "Anonymous" for
+  /// the user's own work even against an older API build.
+  Post _withSelfAuthor(Post post) {
+    final me = ref.read(authStateProvider).user;
+    if (me == null) return post;
+    final name = post.author.name;
+    if (name.isNotEmpty && name != 'Anonymous') return post;
+    return post.copyWith(
+      author: PostAuthor(
+        id: me.id,
+        name: me.penName.isNotEmpty ? me.penName : 'You',
+        username: me.penName.isNotEmpty ? me.penName : null,
+        avatar: me.profileImageUrl,
+        type: 'creator',
+      ),
+    );
   }
 
   @override
@@ -60,12 +86,27 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chronicles'),
+ actions: [
+ IconButton(
+ tooltip: 'Browse categories',
+ icon: const Icon(Icons.category_outlined),
+ onPressed: () => context.push('/chronicles/categories'),
+ ),
+ ],
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.canPop() ? context.pop() : context.go('/more'),
         ),
       ),
-      floatingActionButton: FloatingActionButton(onPressed: () => context.go('/chronicles/create'), child: const Icon(Icons.edit)),
+      // This screen's Scaffold is nested inside the shell's, so it does not
+      // know about the floating bar drawn over it — lift the button clear.
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: kShellFabClearance),
+        child: FloatingActionButton(
+          onPressed: () => context.go('/chronicles/create'),
+          child: const Icon(Icons.edit),
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: CustomScrollView(
@@ -97,6 +138,7 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
                   childCount: _tab == 'mine' ? myChronicles.length : filtered.length,
                 ),
               ),
+            const SliverToBoxAdapter(child: SizedBox(height: kBottomNavClearance)),
           ],
         ),
       ),

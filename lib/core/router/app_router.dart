@@ -6,6 +6,7 @@ import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/onboarding_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/chronicles/presentation/chronicle_categories_screen.dart';
 import '../../features/chronicles/presentation/chronicles_screen.dart';
 import '../../features/chronicles/presentation/create_chronicles_post_screen.dart';
 import '../../features/chronicles/presentation/chronicles_post_detail_screen.dart';
@@ -38,19 +39,64 @@ import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/profile/presentation/review_detail_screen.dart';
 import '../../features/premium/presentation/premium_screen.dart';
 import '../../features/spoken_words/presentation/spoken_words_screen.dart';
+import '../../features/search/presentation/search_screen.dart';
+import '../../shared/widgets/back_guard.dart';
 import '../../shared/widgets/main_layout.dart';
+import '../../shared/widgets/route_error_screen.dart';
 import '../../shared/widgets/post_detail_screen.dart';
 import '../../shared/widgets/creator_profile_screen.dart';
 import '../utils/auth_guard.dart';
+import 'navigation_keys.dart';
+
+/// Maps a custom-scheme deep link onto a real app route.
+///
+/// Share links open the app as `whispr://app/<type>/<id>`. The router matches
+/// on the *path* part, and older links (and hand-typed ones) use singular
+/// types, so `whispr://app/chronicle/<id>` arrived as `/chronicle/<id>` — no
+/// such route — and dropped the user on the not-found page. Normalising the
+/// first segment here means a shared link always lands on the content.
+String? _normalizeDeepLink(Uri uri) {
+  const aliases = <String, String>{
+    'chronicle': 'chronicles',
+    'story': 'stories',
+    'writing-chain': 'writing-chains',
+    'creator-studio': 'creator/studio',
+  };
+
+  var segments = uri.pathSegments.toList();
+  if (segments.isEmpty) return null;
+
+  // The web resolver serves share links as `https://…/r/<type>/<id>`; opening
+  // one inside the app (App Links, or the link already in the clipboard) keeps
+  // that `/r` segment, so drop it before matching.
+  if (segments.length > 1 && (segments.first == 'r' || segments.first == 'app')) {
+    segments = segments.sublist(1);
+  }
+
+  // `whispr://app/<type>/<id>` and `whispr://<type>/<id>` both put the type
+  // first in the path, so there is nothing to strip — only to rename.
+  final alias = aliases[segments.first];
+  if (alias == null) return null;
+
+  segments = [...alias.split('/'), ...segments.skip(1)];
+  return '/${segments.join('/')}';
+}
 
 final router = GoRouter(
   initialLocation: '/splash',
+ refreshListenable: AuthGuard.signedIn,
+  errorBuilder: (context, state) => RouteErrorScreen(location: state.uri.toString()),
   redirect: (context, state) async {
     final location = state.matchedLocation;
 
     // If the location is exactly '/', redirect to splash
     if (location == '/') {
       return '/splash';
+    }
+
+    final normalized = _normalizeDeepLink(state.uri);
+    if (normalized != null && normalized != location) {
+      return normalized;
     }
 
     // Never redirect while the session is still being read from storage — a
@@ -73,6 +119,7 @@ final router = GoRouter(
                           location == '/games' ||
                           location == '/guides' ||
                           location == '/stories' ||
+                          location == '/search' ||
                           location.startsWith('/stories/') ||
                           location.startsWith('/post/') ||
                           location.startsWith('/chronicles/') ||
@@ -123,11 +170,16 @@ final router = GoRouter(
 
     // Main app with bottom navigation
     ShellRoute(
+      navigatorKey: shellNavigatorKey,
       builder: (context, state, child) => MainLayout(child: child),
       routes: [
         GoRoute(
           path: '/home',
           builder: (context, state) => const HomeScreen(),
+        ),
+        GoRoute(
+          path: '/search',
+          builder: (context, state) => const SearchScreen(),
         ),
         GoRoute(
           path: '/chronicles',
@@ -300,7 +352,11 @@ final router = GoRouter(
         ),
         // Chronicles post details - supports both deep link formats (slug or id)
         GoRoute(
-          path: '/chronicles/:id',
+          path: '/chronicles/categories',
+ builder: (context, state) => const ChronicleCategoriesScreen(),
+ ),
+ GoRoute(
+ path: '/chronicles/:id',
           builder: (context, state) {
             final id = state.pathParameters['id']!;
             // Detect if it's a slug (contains non-numeric characters) or UUID
@@ -315,31 +371,31 @@ final router = GoRouter(
     // AI Chat (new)
     GoRoute(
       path: '/ai-chat',
-      builder: (context, state) => const AiChatScreen(),
+      builder: (context, state) => const BackGuard(child: AiChatScreen()),
     ),
 
     // Premium
     GoRoute(
       path: '/premium',
-      builder: (context, state) => const PremiumScreen(),
+      builder: (context, state) => const BackGuard(child: PremiumScreen()),
     ),
 
     // Creator studio — the workspace for managing your own work. Declared
     // before `/creator/:id` so "studio" is not parsed as a creator id.
     GoRoute(
       path: '/creator/studio',
-      builder: (context, state) => const CreatorDashboardScreen(),
+      builder: (context, state) => const BackGuard(child: CreatorDashboardScreen()),
     ),
     GoRoute(
       path: '/creator/settings',
-      builder: (context, state) => const CreatorSettingsScreen(),
+      builder: (context, state) => const BackGuard(child: CreatorSettingsScreen()),
     ),
     // Creator profile
     GoRoute(
       path: '/creator/:id',
       builder: (context, state) {
         final id = state.pathParameters['id']!;
-        return CreatorProfileScreen(creatorId: id);
+        return BackGuard(child: CreatorProfileScreen(creatorId: id));
       },
     ),
   ],

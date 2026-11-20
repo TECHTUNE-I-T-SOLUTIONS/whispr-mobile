@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import 'app_router.dart';
+import '../services/deep_link_service.dart';
 
 /// Turns a notification payload into a navigation.
 ///
@@ -20,14 +20,17 @@ class NotificationRouter {
       return;
     }
 
-    final path = payload.substring(_scheme.length);
+    var path = payload.substring(_scheme.length);
+    // Share links and push payloads both use `whispr://app/<type>/<id>`; the
+    // bare `whispr://<type>/<id>` form is still supported.
+    if (path.startsWith('app/')) path = path.substring(4);
     final route = _resolve(path);
     if (route == null) return;
 
-    // The router may still be building right after a cold start triggered by
-    // the notification tap; defer a frame so navigation has a target.
+    // A tap can launch a cold app. Hand the route to DeepLinkService so it
+    // waits for the splash screen to restore auth, exactly like a share link.
     debugPrint('[NotificationRouter] $payload -> $route');
-    router.go(route);
+    DeepLinkService.instance.handleRoute(route);
   }
 
   static String? _resolve(String path) {
@@ -41,11 +44,19 @@ class NotificationRouter {
         return '/games';
       case 'chronicles':
         return '/chronicles';
+      case 'writing-chains':
+        return '/writing-chains';
+      case 'stories':
+        return '/stories';
+      case 'login':
+        return '/login';
       default:
         // `post/<id>` and `chronicles/<id|slug>` map straight onto app routes.
         if (path.startsWith('post/') && path.length > 5) return '/$path';
         if (path.startsWith('chronicles/') && path.length > 11) return '/$path';
-        if (path.startsWith('story/') && path.length > 6) return '/stories/${path.substring(6)}';
+        if (path.startsWith('story/') && path.length > 6) {
+          return '/stories/${path.substring(6)}';
+        }
         debugPrint('[NotificationRouter] no route for "$path"');
         return null;
     }

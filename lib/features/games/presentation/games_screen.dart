@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/services/games_progress_service.dart';
 import '../../../core/services/games_service.dart';
+import '../../../core/constants/layout.dart';
 
 class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
@@ -122,6 +123,7 @@ class _GamesScreenState extends State<GamesScreen> {
                 ] else ...[
                   SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _section('Guides & Tutorials', _modules))),
                 ],
+                const SliverToBoxAdapter(child: SizedBox(height: kBottomNavClearance)),
               ],
             ),
     );

@@ -76,6 +76,23 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Challenges created in the admin/cron pipeline carry a
+                // featured image; show it so the card matches the web.
+                if (s.challenge.imageUrl != null &&
+                    s.challenge.imageUrl!.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
+                    child: Image.network(
+                      s.challenge.imageUrl!,
+                      height: _expanded ? 180 : 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 Row(
                   children: [
                     _streakChip(s.currentStreak, done, isDark),

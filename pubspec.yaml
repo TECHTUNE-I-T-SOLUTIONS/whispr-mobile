@@ -1,7 +1,7 @@
 name: whispr
 description: "Share your thoughts, poems, and stories with the world."
 publish_to: 'none'
-version: 1.2.0+7
+version: 2.1.1+9
 
 environment:
   sdk: ^3.11.1
@@ -16,6 +16,8 @@ dependencies:
 
   # Navigation
   go_router: ^13.0.0
+  # Incoming links: the whispr:// scheme plus https share links.
+  app_links: ^6.4.1
 
   # HTTP Client
   dio: ^5.3.2
@@ -64,6 +66,7 @@ flutter:
     - assets/images/
     - .env
     - .env.local
+    - shorebird.yaml
 
 # Launcher Icon Configuration
 flutter_launcher_icons:

@@ -6,10 +6,11 @@ import '../../core/models/chronicles.dart';
 import '../../core/network/api_service.dart';
 import '../../core/services/auth_session_store.dart';
 import '../../core/services/push_notification_service.dart';
+import '../../core/services/registered_accounts_store.dart';
+import '../../core/services/session_bootstrap.dart';
 import '../../core/services/session_manager.dart';
 import '../../core/utils/auth_guard.dart';
 
-// Auth state notifier
 class AuthState {
   final bool isLoading;
   final bool isLoggedIn;
@@ -27,7 +28,7 @@ class AuthState {
     this.error,
   });
 
-  // Backward compatibility alias
+  // Backward compatibility alias.
   bool get isAuthenticated => isLoggedIn;
 
   AuthState copyWith({
@@ -37,6 +38,7 @@ class AuthState {
     String? accessToken,
     String? refreshToken,
     String? error,
+    bool clearError = false,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
@@ -44,153 +46,112 @@ class AuthState {
       user: user ?? this.user,
       accessToken: accessToken ?? this.accessToken,
       refreshToken: refreshToken ?? this.refreshToken,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
 
-// Auth state notifier class
+/// Reactive auth state. The encrypted store is the persistence authority;
+/// this class only mirrors it for the UI and router.
 class AuthStateNotifier extends StateNotifier<AuthState> {
   final ApiService apiService;
 
   AuthStateNotifier(this.apiService) : super(AuthState());
 
-  // Initialize auth state on app startup
-  Future<void> initializeAuth() async {
-    state = state.copyWith(isLoading: true, error: null);
+  /// Called once by [sessionBootstrapProvider] with the already-restored
+  /// session. Never reads storage itself.
+  Future<void> adoptRestoredSession(AuthSessionData? session) async {
+    if (session == null) {
+      AuthGuard.setSignedIn(false);
+      state = AuthState();
+      debugPrint('[Auth] no stored session; starting signed out');
+      return;
+    }
+    await _adoptSignedIn(session);
+    debugPrint('[Auth] restored session for ${session.user.penName}');
+  }
+
+  Future<void> _adoptSignedIn(AuthSessionData session) async {
+    try {
+      await _setSupabaseTokens(session.accessToken, session.refreshToken);
+    } catch (e) {
+      debugPrint('[Auth] Supabase token attach failed: $e');
+    }
 
     try {
-      final storedSession = await AuthSessionStore.restore();
-
-      debugPrint('Auth initialization: Checking stored session bundle...');
-      debugPrint('Session bundle exists: ${storedSession != null}');
-
-      if (storedSession != null) {
-        try {
-          await _setSupabaseTokens(storedSession.accessToken, storedSession.refreshToken);
-
-          // Initialize push notifications when restoring session
-          try {
-            final pushService = PushNotificationService();
-            await pushService.subscribeToPushNotifications();
-            debugPrint('Push notifications subscribed successfully on session restore');
-          } catch (e) {
-            debugPrint('Failed to initialize push notifications on session restore: $e');
-            // Don't fail session restore if push notifications fail to initialize
-          }
-
-          state = state.copyWith(
-            isLoggedIn: true,
-            user: storedSession.user,
-            accessToken: storedSession.accessToken,
-            refreshToken: storedSession.refreshToken,
-            isLoading: false,
-            error: null,
-          );
-          await AuthSessionStore.save(
-            accessToken: storedSession.accessToken,
-            refreshToken: storedSession.refreshToken,
-            user: storedSession.user,
-            sessionStart: storedSession.sessionStart,
-          );
-
-          AuthGuard.setSignedIn(true);
-
-          debugPrint('Auth state restored successfully for user: ${storedSession.user.penName}');
-        } catch (e) {
-          debugPrint('Error restoring session: $e');
-          await AuthSessionStore.clear();
-          AuthGuard.setSignedIn(false);
-
-          state = state.copyWith(isLoading: false, error: null);
-          debugPrint('Corrupted session data cleared');
-        }
-      } else {
-        // No tokens found
-        AuthGuard.setSignedIn(false);
-        debugPrint('No stored credentials found - starting fresh');
-        state = state.copyWith(isLoading: false, error: null);
-      }
+      await PushNotificationService().subscribeOnceForAccount(session.user.id);
     } catch (e) {
-      debugPrint('Auth initialization failed: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: 'Failed to initialize auth: $e',
-      );
+      debugPrint('[Auth] push subscription failed: $e');
+    }
+
+    state = AuthState(
+      isLoggedIn: true,
+      user: session.user,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
+    AuthGuard.setSignedIn(true);
+  }
+
+  Future<void> _registerAccount(Creator creator) async {
+    try {
+      await RegisteredAccountsStore.instance.upsert(creator);
+    } catch (e) {
+      debugPrint('[Auth] account registry update failed: $e');
     }
   }
 
-  // Login with email and password
   Future<bool> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = AuthState(isLoading: true);
 
     try {
       final response = await apiService.post(
         '/chronicles/auth/login',
-        data: {
-          'email': email,
-          'password': password,
-        },
+        data: {'email': email, 'password': password},
       );
 
       if (response['success'] != true) {
         throw Exception(response['error'] ?? 'Login failed');
       }
 
-      // Parse creator and tokens
       final creator = Creator.fromJson(response['creator']);
       final accessToken = response['access_token'] as String;
       final refreshToken = response['refresh_token'] as String?;
+      final now = DateTime.now();
 
-      // Store tokens and user data persistently
+      // Throws if the encrypted write fails: a login that was not persisted
+      // must not be reported as successful.
       await AuthSessionStore.save(
         accessToken: accessToken,
         refreshToken: refreshToken,
         user: creator,
+        sessionStart: now,
       );
+      await _registerAccount(creator);
 
-      debugPrint('User data saved to storage: ${creator.penName}');
-
-      // Set tokens in Supabase
-      await _setSupabaseTokens(accessToken, refreshToken);
-
-      // Reset session timer for new login
-      await SessionManager().resetSession();
-
-      // Initialize push notifications after successful login
-      try {
-        final pushService = PushNotificationService();
-        await pushService.subscribeToPushNotifications();
-        await pushService.showLoginSuccessNotification();
-        debugPrint('Push notifications subscribed and login notification sent');
-      } catch (e) {
-        debugPrint('Failed to initialize push notifications: $e');
-        // Don't fail the login if push notifications fail to initialize
-      }
-
-      state = state.copyWith(
-        isLoading: false,
-        isLoggedIn: true,
-        user: creator,
+      await _adoptSignedIn(AuthSessionData(
         accessToken: accessToken,
         refreshToken: refreshToken,
-        error: null,
-      );
+        user: creator,
+        savedAt: now,
+        sessionStart: now,
+      ));
 
-      AuthGuard.setSignedIn(true);
+      try {
+        await PushNotificationService().showLoginSuccessNotification();
+      } catch (e) {
+        debugPrint('[Auth] login notification failed: $e');
+      }
+
       debugPrint('Login successful for user: ${creator.penName}');
       return true;
     } catch (e) {
       debugPrint('Login failed: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = AuthState(error: e.toString());
       return false;
     }
   }
 
-  // Signup with email, password, and profile info
   Future<Creator> signup({
     required String email,
     required String password,
@@ -200,7 +161,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     String? contentType,
     List<String>? categories,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = AuthState(isLoading: true);
 
     try {
       final response = await apiService.post(
@@ -220,68 +181,50 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
         throw Exception(response['error'] ?? 'Signup failed');
       }
 
-      // Parse creator and tokens
       final creator = Creator.fromJson(response['creator']);
       final accessToken = response['access_token'] as String;
       final refreshToken = response['refresh_token'] as String?;
+      final now = DateTime.now();
 
-      // Store tokens and user data persistently
       await AuthSessionStore.save(
         accessToken: accessToken,
         refreshToken: refreshToken,
         user: creator,
+        sessionStart: now,
       );
+      await _registerAccount(creator);
 
-      debugPrint('User data saved to storage: ${creator.penName}');
-
-      // Set tokens in Supabase
-      await _setSupabaseTokens(accessToken, refreshToken);
-
-      state = state.copyWith(
-        isLoading: false,
-        isLoggedIn: true,
-        user: creator,
+      await _adoptSignedIn(AuthSessionData(
         accessToken: accessToken,
         refreshToken: refreshToken,
-        error: null,
-      );
+        user: creator,
+        savedAt: now,
+        sessionStart: now,
+      ));
 
-      AuthGuard.setSignedIn(true);
+      try {
+        await PushNotificationService().showSignupSuccessNotification();
+      } catch (e) {
+        debugPrint('[Auth] signup notification failed: $e');
+      }
+
       debugPrint('Signup successful for user: ${creator.penName}');
       return creator;
     } catch (e) {
       debugPrint('Signup failed: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = AuthState(error: e.toString());
       rethrow;
     }
   }
 
-  // Logout
   Future<void> logout() async {
     state = state.copyWith(isLoading: true);
 
     try {
       debugPrint('Logging out user...');
-      
-      // Send logout notification before clearing data - DISABLED for now
-      /*
-      try {
-        final pushService = PushNotificationService();
-        await pushService.unsubscribeFromPushNotifications();
-        await pushService.showLogoutNotification();
-        debugPrint('Logout notification sent');
-      } catch (e) {
-        debugPrint('Failed to send logout notification: $e');
-        // Don't fail logout if notifications fail
-      }
-      */
 
       // Deactivate this device's push token while the access token is still
-      // valid — the /push/fcm-token endpoint authenticates with it. Without
-      // this the phone keeps receiving the old account's notifications.
+      // valid — the endpoint authenticates with it.
       try {
         await PushNotificationService().unregisterToken();
       } catch (e) {
@@ -289,169 +232,170 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       }
 
       await AuthSessionStore.clear();
-      debugPrint('Session data cleared from storage');
-
-      // Clear session manager data
       await SessionManager().clearSessionData();
 
-      // Clear Supabase session
-      await Supabase.instance.client.auth.signOut();
+      // Supabase sign-out is best effort; local sign-out must still complete.
+      try {
+        await Supabase.instance.client.auth.signOut();
+      } catch (e) {
+        debugPrint('Supabase sign-out failed: $e');
+      }
 
-      // Reset state completely
       AuthGuard.setSignedIn(false);
-      state = AuthState(isLoading: false);
-      
+      state = AuthState();
       debugPrint('Logout successful - auth state reset');
     } catch (e) {
       debugPrint('Logout error: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: 'Logout failed: $e',
-      );
+      AuthGuard.setSignedIn(false);
+      state = AuthState(error: 'Logout failed: $e');
     }
   }
 
-  // Refresh access token using refresh token
   Future<bool> refreshAccessToken() async {
     try {
-      final refreshToken = state.refreshToken;
-      if (refreshToken == null) return false;
+      final refreshToken =
+          AuthSessionStore.currentSession?.refreshToken ?? state.refreshToken;
+      if (refreshToken == null || refreshToken.isEmpty) return false;
 
       final response = await apiService.post(
         '/chronicles/auth/refresh',
         data: {'refresh_token': refreshToken},
       );
 
-      if (response['access_token'] == null) {
-        return false;
-      }
+      final newAccessToken = response['access_token']?.toString();
+      if (newAccessToken == null || newAccessToken.isEmpty) return false;
+      final newRefreshToken = response['refresh_token']?.toString();
 
-      final newAccessToken = response['access_token'] as String;
-      final newRefreshToken = response['refresh_token'] as String?;
-
-      // Store new tokens
-      final currentUser = state.user;
-      if (currentUser != null) {
-        await AuthSessionStore.save(
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken ?? state.refreshToken,
-          user: currentUser,
-        );
-      }
-
-      // Set tokens in Supabase
-      await _setSupabaseTokens(newAccessToken, newRefreshToken);
-
-      state = state.copyWith(
+      await AuthSessionStore.updateTokens(
         accessToken: newAccessToken,
-        refreshToken: newRefreshToken ?? state.refreshToken,
+        refreshToken: newRefreshToken,
       );
-
+      acceptRefreshedTokens(newAccessToken, newRefreshToken);
       return true;
     } catch (e) {
-      // Token refresh failed
+      debugPrint('[Auth] token refresh failed: $e');
       return false;
     }
   }
 
-  // Set tokens in Supabase client for database operations
-  Future<void> _setSupabaseTokens(String accessToken, String? refreshToken) async {
+  /// Called by ApiService after a silent 401/403 refresh. Keeps the in-memory
+  /// state aligned without another storage read.
+  void acceptRefreshedTokens(String accessToken, String? refreshToken) {
+    if (accessToken.isEmpty) return;
+    state = state.copyWith(
+      accessToken: accessToken,
+      refreshToken: refreshToken ?? state.refreshToken,
+    );
     try {
-      final supabase = Supabase.instance.client;
-      
-      // Update the auth header for the Supabase client
-      supabase.rest.headers['Authorization'] = 'Bearer $accessToken';
-      
-      // If you need to use real Supabase auth session, you can set it here
-      // but since we're using API tokens, the header is sufficient
-    } catch (e) {
-      // Error setting tokens - not critical since API service also sets them
+      Supabase.instance.client.rest.headers['Authorization'] =
+          'Bearer $accessToken';
+    } catch (_) {
+      // Supabase may not be initialised in a test harness.
     }
   }
 
-  // Update user data
+  Future<void> _setSupabaseTokens(
+    String accessToken,
+    String? refreshToken,
+  ) async {
+    final supabase = Supabase.instance.client;
+
+    // Attach the access token to every REST call *first*, unconditionally.
+    // A failed setSession (rotated refresh token, offline launch, ...) must
+    // not leave Supabase-backed screens looking signed out.
+    supabase.rest.headers['Authorization'] = 'Bearer $accessToken';
+
+    if (refreshToken == null || refreshToken.isEmpty) return;
+
+    try {
+      await supabase.auth.setSession(refreshToken);
+    } catch (e) {
+      debugPrint('[Auth] Supabase session restore failed; keeping REST header: $e');
+      // A failed setSession can clear the header — put the fallback back.
+      supabase.rest.headers['Authorization'] = 'Bearer $accessToken';
+    }
+  }
+
+  /// Re-attaches the current token on foreground resume.
+  Future<void> syncSupabaseSession() async {
+    try {
+      final session = AuthSessionStore.currentSession;
+      final accessToken = session?.accessToken ?? state.accessToken;
+      if (accessToken == null || accessToken.isEmpty) return;
+      await _setSupabaseTokens(
+        accessToken,
+        session?.refreshToken ?? state.refreshToken,
+      );
+    } catch (e) {
+      debugPrint('[Auth] Supabase session re-sync failed: $e');
+    }
+  }
+
   Future<bool> updateUser(Creator updatedUser) async {
     try {
-      await AuthSessionStore.save(
-        accessToken: state.accessToken ?? '',
-        refreshToken: state.refreshToken,
-        user: updatedUser,
-      );
-
+      await AuthSessionStore.saveUser(updatedUser);
+      await _registerAccount(updatedUser);
       state = state.copyWith(user: updatedUser);
       return true;
     } catch (e) {
+      debugPrint('[Auth] profile save failed: $e');
       return false;
     }
   }
 
-  // Refresh avatar from API
   Future<void> refreshAvatar() async {
     if (!state.isLoggedIn || state.user == null) return;
 
     try {
       final avatarUrl = await apiService.get('/chronicles/creator/avatar');
       final url = avatarUrl['avatar'] as String?;
-      
+
       if (url != null && url != state.user!.profileImageUrl) {
         final updatedUser = state.user!.copyWith(profileImageUrl: url);
         await updateUser(updatedUser);
       }
-    } catch (e) {
-      // Silently fail - avatar refresh is not critical
+    } catch (_) {
+      // Avatar refresh is not critical.
     }
   }
 
-  // Clear error message
   void clearError() {
-    state = state.copyWith(error: null);
+    state = state.copyWith(clearError: true);
   }
 
-  // Forgot password - request password reset email
   Future<void> forgotPassword(String email) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       await apiService.post(
         '/chronicles/auth/forgot-password',
         data: {'email': email},
       );
-
-      state = state.copyWith(
-        isLoading: false,
-        error: null,
-      );
+      state = state.copyWith(isLoading: false, clearError: true);
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
     }
   }
 
-  // Check if user is authenticated
   bool isAuthenticated() => state.isLoggedIn && state.accessToken != null;
 
-  // Get access token
   String? getAccessToken() => state.accessToken;
 
-  // Get refresh token
   String? getRefreshToken() => state.refreshToken;
 }
 
-// Riverpod providers
-final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>((ref) {
+final authStateProvider =
+    StateNotifierProvider<AuthStateNotifier, AuthState>((ref) {
   return AuthStateNotifier(ApiService.instance);
 });
 
-// Provider to restore auth on app startup
+/// Backward-compatible alias. New code should wait on sessionBootstrapProvider.
+@Deprecated('Use sessionBootstrapProvider instead')
 final authInitializationProvider = FutureProvider<void>((ref) async {
-  final auth = ref.read(authStateProvider.notifier);
-  await auth.initializeAuth();
+  await ref.read(sessionBootstrapProvider.future);
 });
 
-// Authentication convenience providers
 final userProvider = Provider<Creator?>((ref) {
   return ref.watch(authStateProvider).user;
 });

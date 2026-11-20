@@ -5,8 +5,10 @@ import 'package:dio/dio.dart' as dio;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
+import '../services/auth_session_store.dart';
 
 // Provider for ApiService
 final apiServiceProvider = Provider<ApiService>((ref) {
@@ -24,6 +26,9 @@ class ApiService {
   final Completer<void> _initCompleter = Completer<void>();
   bool _isRefreshingToken = false;
 
+ // Set by SessionScope so a silent refresh is mirrored into auth state.
+ static void Function(String accessToken, String? refreshToken)? onTokensRefreshed;
+
   // Private constructor
   ApiService._internal() {
     _initService();
@@ -39,7 +44,10 @@ class ApiService {
 
     try {
       _prefs = await SharedPreferences.getInstance();
-      _dio = dio.Dio(
+
+      // Token restoration is owned by sessionBootstrapProvider. Reading storage
+ // here raced with bootstrap and splash on the same secure-storage key.
+ _dio = dio.Dio(
         dio.BaseOptions(
           baseUrl: AppConstants.baseUrl,
           connectTimeout: AppConstants.apiTimeout,
@@ -81,8 +89,13 @@ class ApiService {
       dio.InterceptorsWrapper(
         onRequest: (options, handler) async {
           await ensureInitialized();
-          final token = _prefs?.getString(AppConstants.accessTokenKey);
-          if (token != null) {
+          // AuthSessionStore is the single source of truth. The legacy
+          // SharedPreferences key is only a fallback for installs that have
+          // not migrated yet — login deletes it, which is why reading it
+          // alone left every authenticated request anonymous.
+          final token = AuthSessionStore.cachedAccessToken ??
+              _prefs?.getString(AppConstants.accessTokenKey);
+          if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           handler.next(options);
@@ -98,7 +111,8 @@ class ApiService {
               }
 
               // Attempt to refresh token
-              final refreshToken = _prefs?.getString(AppConstants.refreshTokenKey);
+              final refreshToken = AuthSessionStore.cachedRefreshToken ??
+    _prefs?.getString(AppConstants.refreshTokenKey);
               if (refreshToken != null) {
                 _isRefreshingToken = true;
                 final refreshResponse = await _refreshDio.post(
@@ -110,14 +124,25 @@ class ApiService {
                 );
 
                 if (refreshResponse.statusCode == 200) {
-                  final newAccessToken = refreshResponse.data?['access_token'];
-                  final newRefreshToken = refreshResponse.data?['refresh_token'];
-                  
-                  if (newAccessToken != null) {
-                    // Store new tokens
-                    await _prefs?.setString(AppConstants.accessTokenKey, newAccessToken);
-                    if (newRefreshToken != null) {
-                      await _prefs?.setString(AppConstants.refreshTokenKey, newRefreshToken);
+                  final newAccessToken = refreshResponse.data?['access_token']?.toString().trim();
+ final newRefreshToken = refreshResponse.data?['refresh_token']?.toString();
+ if (newAccessToken != null && newAccessToken.isNotEmpty) {
+                    // Persist into the same store the request interceptor
+                    // reads, so the refreshed token survives the next request.
+                    await AuthSessionStore.updateTokens(
+                      accessToken: newAccessToken,
+                      refreshToken: newRefreshToken,
+                    );
+ onTokensRefreshed?.call(newAccessToken, newRefreshToken);
+
+                    // Keep Supabase's REST client on the same token, otherwise
+                    // the next Supabase-backed query uses the expired one and
+                    // looks like a signed-out user.
+                    try {
+                      Supabase.instance.client.rest.headers['Authorization'] =
+                          'Bearer $newAccessToken';
+                    } catch (_) {
+                      // Supabase may not be initialised in a test harness.
                     }
 
                     // Update request headers and retry

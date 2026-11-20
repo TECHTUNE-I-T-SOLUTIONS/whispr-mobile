@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/services/session_manager.dart';
+import '../../../core/services/deep_link_service.dart';
+import '../../../core/services/session_bootstrap.dart';
 import '../auth_state.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -13,7 +14,8 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -24,8 +26,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
     super.initState();
     _setupAnimations();
     _loadThemePreference();
-    
-    // Delay auth initialization until after the frame is built (Riverpod requirement)
+
+    // Start after the frame is built (Riverpod requirement).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAndNavigate();
     });
@@ -38,17 +40,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
     );
 
     _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.elasticOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeIn,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
     _animationController.forward();
@@ -59,10 +55,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
       final prefs = await SharedPreferences.getInstance();
       final theme = prefs.getString('theme') ?? 'light';
       setState(() {
-        _logoPath = theme == 'dark' ? 'assets/images/darklogo.png' : 'assets/images/lightlogo.png';
+        _logoPath = theme == 'dark'
+            ? 'assets/images/darklogo.png'
+            : 'assets/images/lightlogo.png';
       });
-    } catch (e) {
-      // Default to light logo if there's an error
+    } catch (_) {
       setState(() {
         _logoPath = 'assets/images/lightlogo.png';
       });
@@ -71,36 +68,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
 
   Future<void> _initializeAndNavigate() async {
     try {
-      // Initialize auth state from local storage
-      debugPrint('[SplashScreen] Starting auth initialization...');
-      // Restore the session while the brand animation plays, in parallel.
-      // The splash now lasts as long as the slower of the two instead of
-      // always spending two seconds idling on top of storage reads.
-      await Future.wait([
-        ref.read(authStateProvider.notifier).initializeAuth(),
-        SessionManager().initializeSession(),
-      ]);
+      debugPrint('[SplashScreen] Waiting for the shared session bootstrap...');
+      // SessionScope started this once. Awaiting it keeps the animation as the
+      // first frame without restoring storage a second time.
+      await ref.read(sessionBootstrapProvider.future);
       await _animationController.forward();
-      debugPrint('[SplashScreen] Auth initialization completed');
+      debugPrint('[SplashScreen] Session bootstrap completed');
 
-      if (mounted) {
-        final authState = ref.read(authStateProvider);
-        
-        debugPrint('[SplashScreen] Auth state after init: isLoggedIn=${authState.isLoggedIn}');
-        
-        // Check if user is authenticated after initialization
-        if (authState.isLoggedIn && authState.user != null) {
-          debugPrint('[SplashScreen] User authenticated, navigating to /home');
-          context.go('/home');
-        } else {
-          debugPrint('[SplashScreen] User not authenticated, navigating to /onboarding');
-          context.go('/onboarding');
-        }
+      if (!mounted) return;
+      final authState = ref.read(authStateProvider);
+      debugPrint(
+          '[SplashScreen] Auth state: isLoggedIn=${authState.isLoggedIn}');
+
+      // A cold-start link has been waiting and takes precedence over the
+      // usual destination. The router still gates signed-in-only routes.
+      DeepLinkService.instance.markAppReady();
+      final deepLink = DeepLinkService.instance.takePendingRoute();
+      if (deepLink != null) {
+        debugPrint('[SplashScreen] Following link: $deepLink');
+        context.go(deepLink);
+      } else if (authState.isLoggedIn && authState.user != null) {
+        context.go('/home');
+      } else {
+        context.go('/onboarding');
       }
     } catch (e) {
-      // A restore failure must still get the user somewhere useful. Bouncing
-      // to onboarding is correct here: they can sign in again from there.
-      debugPrint('[SplashScreen] Auth initialization error: $e');
+      // Bootstrap guards its own side effects, so this is a genuine failure.
+      debugPrint('[SplashScreen] Bootstrap error: $e');
       if (mounted) context.go('/onboarding');
     }
   }

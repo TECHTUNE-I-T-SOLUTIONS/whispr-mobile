@@ -4,10 +4,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
+import 'core/router/app_back_dispatcher.dart';
+import 'core/services/deep_link_service.dart';
 import 'core/services/push_notification_service.dart';
-import 'core/services/session_manager.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/session_scope.dart';
 import 'features/theme/theme_provider.dart';
+
+final appBackButtonDispatcher = AppBackButtonDispatcher();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +23,8 @@ void main() async {
 
   await Supabase.initialize(
     url: 'https://vkftywhuaxwbknlrymnr.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZnR5d2h1YXh3YmtubHJ5bW5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MDU4MzksImV4cCI6MjA2NjM4MTgzOX0.FSPBORGCJEQQAQKGC5c-VHAdt3Zlm1CQ1YexYuKDATY',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZnR5d2h1YXh3YmtubHJ5bW5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4MDU4MzksImV4cCI6MjA2NjM4MTgzOX0.FSPBORGCJEQQAQKGC5c-VHAdt3Zlm1CQ1YexYuKDATY',
   );
 
   // Prepare the notification plugin before the first frame so a tap that
@@ -31,16 +36,17 @@ void main() async {
     debugPrint('[main] notification init failed: $e');
   }
 
-  // Restore the stored session before the router exists. The redirect guard
-  // reads this flag in memory, so the first navigation is already correct and
-  // there is no login-screen flash for a returning user.
+  // A link that launched the app has to be captured before the first frame,
+  // otherwise Android hands it over only when the activity is already up and
+  // the destination is lost. The route itself waits for the splash screen.
   try {
-    await SessionManager().initializeSession();
+    await DeepLinkService.instance.initialize();
   } catch (e) {
-    debugPrint('[main] session init failed: $e');
+    debugPrint('[main] deep link init failed: $e');
   }
 
-  runApp(const ProviderScope(child: WhisprApp()));
+  // Session restore, API setup and live updates are owned by SessionScope.
+  runApp(const ProviderScope(child: SessionScope(child: WhisprApp())));
 }
 
 class WhisprApp extends ConsumerStatefulWidget {
@@ -50,30 +56,7 @@ class WhisprApp extends ConsumerStatefulWidget {
   ConsumerState<WhisprApp> createState() => _WhisprAppState();
 }
 
-class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    if (state == AppLifecycleState.resumed) {
-      // Resuming only re-checks that the local session is still readable. It
-      // never signs the user out for being away — see SessionManager.
-      SessionManager().checkAndHandleSessionExpiration();
-    }
-  }
-
+class _WhisprAppState extends ConsumerState<WhisprApp> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
@@ -83,7 +66,10 @@ class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserv
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      routerConfig: router,
+      routeInformationProvider: router.routeInformationProvider,
+ routeInformationParser: router.routeInformationParser,
+ routerDelegate: router.routerDelegate,
+ backButtonDispatcher: appBackButtonDispatcher,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         // Stop the OS from scaling body text past a readable ceiling; the old
@@ -91,7 +77,8 @@ class _WhisprAppState extends ConsumerState<WhisprApp> with WidgetsBindingObserv
         final media = MediaQuery.of(context);
         return MediaQuery(
           data: media.copyWith(
-            textScaler: media.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.35),
+            textScaler:
+                media.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.35),
           ),
           child: child ?? const SizedBox.shrink(),
         );

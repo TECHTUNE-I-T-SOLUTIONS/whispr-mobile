@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/models/content_badge.dart';
 import '../../../core/models/creator_stats.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/content_cache_service.dart';
 import '../../../core/services/creator_service.dart';
+import '../../../core/services/stories_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../home/widgets/gated_preview.dart';
 
 final _creatorServiceProvider = Provider(
   (ref) => CreatorService(ApiService.instance, ContentCacheService()),
+);
+
+final _storiesServiceProvider = Provider(
+ (ref) => StoriesService(Supabase.instance.client),
 );
 
 /// The creator's own workspace on mobile.
@@ -37,6 +43,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
   List<Map<String, dynamic>> _reviews = [];
   bool _loading = true;
   String? _error;
+ String? _storiesError;
 
   @override
   void initState() {
@@ -55,15 +62,20 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
     setState(() {
       _loading = true;
       _error = null;
+ _storiesError = null;
     });
 
     final service = ref.read(_creatorServiceProvider);
+ final storiesService = ref.read(_storiesServiceProvider);
 
     // Stats, posts, stories and reviews are independent — load together.
     final results = await Future.wait([
       _guard(() => service.getStats(forceRefresh: forceRefresh)),
       _guard(() => service.getMyPosts(forceRefresh: forceRefresh)),
-      _guard(() => service.getMyStories(forceRefresh: forceRefresh)),
+      // The dedicated stories endpoint has lagged behind auth changes on
+ // deployment. Read the same Supabase view the main Stories screen uses so
+ // this tab cannot silently become an empty list on a 401.
+ _guard(() => storiesService.getMyStories()),
       _guard(() => service.getReviews(forceRefresh: forceRefresh)),
     ]);
 
@@ -78,6 +90,9 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
       if (stats is CreatorStats) _stats = stats;
       if (posts is List<Map<String, dynamic>>) _posts = posts;
       if (stories is List<Map<String, dynamic>>) _stories = stories;
+ if (stories == null) {
+ _storiesError = 'Could not load your stories. Pull down to try again.';
+ }
       if (reviews is List<Map<String, dynamic>>) _reviews = reviews;
       _loading = false;
       if (posts == null && stats == null) {
@@ -198,7 +213,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/chronicles/create').then((_) => _load(forceRefresh: true)),
+        onPressed: () => context.go('/chronicles/create'),
         icon: const Icon(Icons.edit_rounded, size: 19),
         label: const Text('Write'),
       ),
@@ -233,28 +248,56 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
             Icons.edit_note_rounded,
             'Write a new post',
             'Poem or essay — publish now or save a draft',
-            () => context.push('/chronicles/create').then((_) => _load(forceRefresh: true)),
+            () => context.go('/chronicles/create'),
           ),
           _actionTile(
             Icons.menu_book_outlined,
             'Start a story',
             'Multi-chapter work with its own readers',
-            () => context.push('/stories/create').then((_) => _load(forceRefresh: true)),
+            () => context.go('/stories/create'),
           ),
           _actionTile(
             Icons.public_rounded,
             'View my portfolio',
             'See what readers see',
-            () => context.push('/portfolio/${_stats.penName ?? ''}'),
+            () => context.go('/portfolio/${_stats.penName ?? ''}'),
           ),
           const SizedBox(height: 22),
-          if (_reviews.isNotEmpty) ...[
+          const SizedBox(height: 12),
+ const _Label('Creator tools'),
+ const SizedBox(height: 10),
+ _actionTile(
+ Icons.link_rounded,
+ 'Writing chains',
+ 'Collaborative writing with other creators',
+ () => context.go('/writing-chains'),
+ ),
+ _actionTile(
+ Icons.library_books_outlined,
+ 'My stories',
+ 'Manage chapters and published stories',
+ () => context.go('/stories/my-stories'),
+ ),
+ _actionTile(
+ Icons.star_outline,
+ 'Reviews',
+ 'What readers said about your work',
+ () => context.go('/reviews'),
+ ),
+ _actionTile(
+ Icons.tune_rounded,
+ 'Creator settings',
+ 'Profile, visibility and notifications',
+ () => context.push('/creator/settings'),
+ ),
+ const SizedBox(height: 22),
+ if (_reviews.isNotEmpty) ...[
             _Label('Recent reviews (${_reviews.length})'),
             const SizedBox(height: 10),
             ..._reviews.take(3).map(_reviewTile),
             const SizedBox(height: 10),
             TextButton(
-              onPressed: () => context.push('/reviews'),
+              onPressed: () => context.go('/reviews'),
               child: const Text('See all reviews'),
             ),
           ],
@@ -456,7 +499,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
         title: 'Nothing written yet',
         body: 'Your drafts and published pieces will show up here.',
         actionLabel: 'Write something',
-        onAction: () => context.push('/chronicles/create').then((_) => _load(forceRefresh: true)),
+        onAction: () => context.go('/chronicles/create'),
       );
     }
 
@@ -526,7 +569,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     case 'publish':
                       _setStatus(post, isPublished ? 'draft' : 'published');
                     case 'edit':
-                      context.push('/chronicles/create').then((_) => _load(forceRefresh: true));
+                      context.go('/chronicles/create');
                     case 'delete':
                       _deletePost(post);
                   }
@@ -600,13 +643,22 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
   // ---------------------------------------------------------------------------
 
   Widget _storiesTab() {
-    if (_stories.isEmpty) {
+ if (_storiesError != null) {
+ return _empty(
+ icon: Icons.cloud_off_outlined,
+ title: 'Stories could not load',
+ body: _storiesError!,
+ actionLabel: 'Try again',
+ onAction: () => _load(forceRefresh: true),
+ );
+ }
+ if (_stories.isEmpty) {
       return _empty(
         icon: Icons.menu_book_outlined,
         title: 'No stories yet',
         body: 'Stories hold chapters — a longer home for your work.',
         actionLabel: 'Start a story',
-        onAction: () => context.push('/stories/create').then((_) => _load(forceRefresh: true)),
+        onAction: () => context.go('/stories/create'),
       );
     }
 
@@ -619,14 +671,25 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
           final story = _stories[index];
           final title = (story['title'] ?? 'Untitled').toString();
           final genre = (story['genre'] ?? '').toString();
-          final chapters = story['chapters'];
-          final chapterCount = chapters is List ? chapters.length : _intOf(story['chapter_count']) ?? 0;
-          final status = (story['status'] ?? 'draft').toString();
+ final chapters = story['chapters'];
+ final chapterList = chapters is List
+ ? chapters.whereType<Map<String, dynamic>>().toList()
+ : <Map<String, dynamic>>[];
+ final chapterCount = chapterList.isNotEmpty
+ ? chapterList.length
+ : _intOf(story['chapters_count']) ??
+ _intOf(story['chapter_count']) ??
+ 0;
+ final status = (story['status'] ?? 'draft').toString();
+ final views = _intOf(story['views_count']) ?? _intOf(story['view_count']) ?? 0;
+ final likes = _intOf(story['likes_count']) ?? 0;
+ final comments = _intOf(story['comments_count']) ?? 0;
+ final shares = _intOf(story['shares_count']) ?? 0;
 
           return MobileCard(
             onTap: () {
               final slug = (story['slug'] ?? story['id'] ?? '').toString();
-              if (slug.isNotEmpty) context.push('/stories/$slug');
+              if (slug.isNotEmpty) context.go('/stories/$slug');
             },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -671,6 +734,52 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                   '$chapterCount ${chapterCount == 1 ? 'chapter' : 'chapters'}',
                   style: TextStyle(fontSize: 11.5, color: Theme.of(context).textTheme.bodySmall?.color),
                 ),
+ const SizedBox(height: 7),
+ Row(
+ children: [
+ _storyStat(Icons.visibility_outlined, views),
+ const SizedBox(width: 14),
+ _storyStat(Icons.favorite_border_rounded, likes),
+ const SizedBox(width: 14),
+ _storyStat(Icons.chat_bubble_outline_rounded, comments),
+ const SizedBox(width: 14),
+ _storyStat(Icons.share_outlined, shares),
+ ],
+ ),
+ if (chapterList.isNotEmpty) ...[
+ const SizedBox(height: 10),
+ Text(
+ 'Chapters',
+ style: TextStyle(
+ fontSize: 11,
+ fontWeight: FontWeight.w700,
+ color: Theme.of(context).textTheme.bodySmall?.color,
+ ),
+ ),
+ const SizedBox(height: 4),
+ ...chapterList.take(4).map(
+ (chapter) => Padding(
+ padding: const EdgeInsets.only(top: 3),
+ child: Text(
+ '${chapter['sequence'] ?? ''} ${chapter['title'] ?? 'Untitled'}',
+ maxLines: 1,
+ overflow: TextOverflow.ellipsis,
+ style: TextStyle(
+ fontSize: 11.5,
+ color: Theme.of(context).textTheme.bodySmall?.color,
+ ),
+ ),
+ ),
+ ),
+ if (chapterList.length > 4)
+ Padding(
+ padding: const EdgeInsets.only(top: 4),
+ child: Text(
+ '+${chapterList.length - 4} more chapters',
+ style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+ ),
+ ),
+ ],
               ],
             ),
           );
@@ -734,6 +843,18 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
       ],
     );
   }
+
+ Widget _storyStat(IconData icon, int count) {
+ final color = Theme.of(context).textTheme.bodySmall?.color;
+ return Row(
+ mainAxisSize: MainAxisSize.min,
+ children: [
+ Icon(icon, size: 13, color: color),
+ const SizedBox(width: 3),
+ Text(_formatCount(count), style: TextStyle(fontSize: 11.5, color: color)),
+ ],
+ );
+ }
 
   static int? _intOf(dynamic value) {
     if (value is int) return value;

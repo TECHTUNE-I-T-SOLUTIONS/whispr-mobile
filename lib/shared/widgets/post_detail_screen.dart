@@ -13,6 +13,8 @@ import '../../core/theme/app_theme.dart';
 import '../../features/auth/auth_state.dart';
 import '../../core/services/feed_service.dart';
 import '../../core/services/content_cache_service.dart';
+import '../../core/constants/layout.dart';
+import '../../core/utils/html_sanitizer.dart';
 
 final _feedServiceProvider = Provider((ref) => FeedService(ApiService.instance, ContentCacheService()));
 
@@ -362,7 +364,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               : _post == null
                   ? const Center(child: Text('Post not found'))
                   : SingleChildScrollView(
-                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppTheme.spacingM,
+                        AppTheme.spacingM,
+                        AppTheme.spacingM,
+                        kBottomNavClearance,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -415,7 +422,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   const SizedBox(height: AppTheme.spacingM),
                                   if (_post!.content != null && _post!.content!.isNotEmpty)
                                     Html(
-                                      data: _post!.content!,
+                                      data: sanitizeHtmlForFlutter(_post!.content!),
                                       style: {
                                         "p": Style(
                                           margin: Margins.only(bottom: 16),

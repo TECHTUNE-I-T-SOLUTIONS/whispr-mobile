@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_service.dart';
 import '../../../features/auth/auth_state.dart';
+import '../../../core/constants/layout.dart';
 
 class ProfileDetailsScreen extends ConsumerStatefulWidget {
   const ProfileDetailsScreen({super.key});
@@ -121,7 +122,12 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
         child: SlideTransition(
           position: _slideAnimation,
           child: ListView(
-            padding: const EdgeInsets.all(AppTheme.spacingL),
+            padding: const EdgeInsets.fromLTRB(
+              AppTheme.spacingL,
+              AppTheme.spacingL,
+              AppTheme.spacingL,
+              kBottomNavClearance,
+            ),
             children: [
               // Profile Avatar Section
               Center(
@@ -283,7 +289,7 @@ class _ProfileDetailsScreenState extends ConsumerState<ProfileDetailsScreen> wit
                     _buildDetailItem('Poems', '${_stats?['totalPoems'] ?? user.totalPoems}', Icons.auto_stories),
                   ] else ...[
                     _buildDetailItem('Chronicles', '${_stats?['totalBlogs'] ?? user.totalBlogs}', Icons.book_outlined),
-                    _buildDetailItem('Writing Chains', '${_stats?['totalPoems'] ?? 0}', Icons.link),
+                    _buildDetailItem('Writing Chains', '${_stats?['totalChains'] ?? 0}', Icons.link),
                   ],
                   _buildDetailItem('Total Followers', '${_stats?['totalFollowers'] ?? user.totalFollowers}', Icons.people_outline),
                   _buildDetailItem('Total Engagement', '${_stats?['totalEngagement'] ?? user.totalEngagement}', Icons.favorite),

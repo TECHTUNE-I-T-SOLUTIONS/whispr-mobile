@@ -2,33 +2,31 @@ import 'package:flutter/foundation.dart';
 
 import '../services/auth_session_store.dart';
 
-/// Gate for signed-in-only areas.
+/// Synchronous router mirror of the auth session.
 ///
-/// This is an in-memory flag, never a disk read. The old version hit
-/// SharedPreferences on every navigation, which made every tap wait on I/O and
-/// made the login screen flash before the session loaded. [AuthSessionStore]
-/// reads storage once at startup; everything after that reads this flag.
+/// [signedIn] is a [ValueNotifier] so `GoRouter.refreshListenable` can
+/// re-evaluate redirects the moment login, logout or bootstrap changes the
+/// session. Nothing here reads disk on the navigation path.
 class AuthGuard {
   AuthGuard._();
 
-  static bool? _signedIn;
+  static final ValueNotifier<bool?> signedIn = ValueNotifier<bool?>(null);
 
   /// True once a session has been read. Until then, routes must not redirect,
   /// or a returning user gets bounced to /login before restore finishes.
-  static bool get isReady => _signedIn != null;
+  static bool get isReady => signedIn.value != null;
 
-  static bool get isLoggedInNow => _signedIn ?? false;
+  static bool get isLoggedInNow => signedIn.value ?? false;
 
-  /// Called once by the auth notifier after restore, login, signup and logout.
-  static void setSignedIn(bool value) => _signedIn = value;
+  /// Called once by bootstrap, login, signup and logout.
+  static void setSignedIn(bool value) => signedIn.value = value;
 
-  /// Kept for callers that need an authoritative check; reads secure storage.
-  /// Use sparingly — prefer [isLoggedInNow] on the navigation path.
+  /// For callers that need an authoritative check when bootstrap has not run.
   static Future<bool> isLoggedIn() async {
-    if (_signedIn != null) return _signedIn!;
+    if (isReady) return isLoggedInNow;
     final session = await AuthSessionStore.restore();
     final signedIn = session != null && session.accessToken.isNotEmpty;
-    _signedIn = signedIn;
+    setSignedIn(signedIn);
     debugPrint('[AuthGuard] resolved session from storage: signedIn=$signedIn');
     return signedIn;
   }

@@ -8,6 +8,7 @@ import '../../../core/services/push_notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/auth_state.dart';
 import '../../../features/theme/theme_provider.dart';
+import '../../../core/constants/layout.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -370,7 +371,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
             ),
           ),
           child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, kBottomNavClearance),
             children: [
               const SizedBox(height: 20),
               // User Info Section
@@ -877,7 +878,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
               ),
             ),
             child: Text(
-              'Version 1.1.6',
+              'Version 2.2.1',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

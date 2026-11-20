@@ -26,7 +26,28 @@ import UIKit
       }
     }
     
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    let liveUpdatesChannel = FlutterMethodChannel(
+ name: "com.whispr.whisprmobile/live_updates",
+ binaryMessenger: controller.binaryMessenger
+ )
+ liveUpdatesChannel.setMethodCallHandler { call, result in
+ switch call.method {
+ case "startLiveActivity":
+ if #available(iOS 16.1, *) {
+ WhisprLiveActivityManager.shared.startOrUpdate(payload: call.arguments as? [String: Any] ?? [:])
+ }
+ result(nil)
+ case "endLiveActivity":
+ if #available(iOS 16.1, *) {
+ WhisprLiveActivityManager.shared.end()
+ }
+ result(nil)
+ default:
+ result(FlutterMethodNotImplemented)
+ }
+ }
+ 
+ return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

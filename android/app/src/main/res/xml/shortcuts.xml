@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="write_chronicle"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_write_short"
+        android:shortcutLongLabel="@string/shortcut_write_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.whisprwords.app"
+            android:targetClass="com.whisprwords.app.MainActivity"
+            android:data="whispr://app/chronicles/create" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="notifications"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_notifications_short"
+        android:shortcutLongLabel="@string/shortcut_notifications_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.whisprwords.app"
+            android:targetClass="com.whisprwords.app.MainActivity"
+            android:data="whispr://app/notifications" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="home"
+        android:enabled="true"
+        android:icon="@mipmap/launcher_icon"
+        android:shortcutShortLabel="@string/shortcut_home_short"
+        android:shortcutLongLabel="@string/shortcut_home_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.whisprwords.app"
+            android:targetClass="com.whisprwords.app.MainActivity"
+            android:data="whispr://app/home" />
+    </shortcut>
+</shortcuts>

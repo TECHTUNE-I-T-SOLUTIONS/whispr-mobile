@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/constants/layout.dart';
 import '../../../core/models/chronicles.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/chains_service.dart';
@@ -217,7 +218,15 @@ class _ChainEntriesScreenState extends ConsumerState<ChainEntriesScreen> with Ti
     return RefreshIndicator(
       onRefresh: _fetchChainDetails,
       child: ListView(
-        padding: const EdgeInsets.all(AppTheme.spacingM),
+        // The shell hides its bar on this route, but the "add entry" button is
+        // still pinned over the list — without the extra tail the last entry
+        // sits underneath it and cannot be tapped.
+        padding: const EdgeInsets.fromLTRB(
+          AppTheme.spacingM,
+          AppTheme.spacingM,
+          AppTheme.spacingM,
+          AppTheme.spacingM + kShellFabClearance,
+        ),
         children: [
           // Chain info
           Card(

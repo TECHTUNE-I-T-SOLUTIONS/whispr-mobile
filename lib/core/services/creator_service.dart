@@ -58,7 +58,7 @@ class CreatorService {
     if (pushNotificationsEnabled != null) data['push_notifications_enabled'] = pushNotificationsEnabled;
     if (location != null) data['location'] = location;
 
-    await _api.patch('/chronicles/creator/profile', data: data);
+    await _api.put('/chronicles/creator/profile', data: data);
     await _cache.remove('creator_profile');
     await _cache.remove('creator_stats');
   }
@@ -71,11 +71,19 @@ class CreatorService {
     const key = 'creator_stats';
     if (!forceRefresh) {
       final cached = await _cache.readJson(key);
-      if (cached is Map) return CreatorStats.fromJson(Map<String, dynamic>.from(cached));
+      if (cached is Map) {
+        final stats = CreatorStats.fromJson(Map<String, dynamic>.from(cached));
+        if (!stats.isEmpty) return stats;
+      }
     }
     final response = await _api.get('/chronicles/creator/stats');
-    await _cache.saveJson(key, response);
-    return CreatorStats.fromJson(response);
+    final stats = CreatorStats.fromJson(response);
+    // Never cache an all-zero result: it is what a request made without the
+    // auth token returns, and caching it hides the real numbers forever.
+    if (!stats.isEmpty) {
+      await _cache.saveJson(key, response);
+    }
+    return stats;
   }
 
   // ---------------------------------------------------------------------------
@@ -90,7 +98,9 @@ class CreatorService {
     final key = 'creator_posts_${status ?? 'all'}';
     if (!forceRefresh) {
       final cached = await _cache.readJson(key);
-      if (cached is List) return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (cached is List && cached.isNotEmpty) {
+        return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
     }
 
     final response = await _api.get(
@@ -98,7 +108,11 @@ class CreatorService {
       queryParameters: status == null ? null : {'status': status},
     );
     final posts = _listFrom(response);
-    await _cache.saveJson(key, posts);
+    // Do not cache an empty page: a token-less request returns one, and a
+    // stale empty cache is what made the creator studio look broken.
+    if (posts.isNotEmpty) {
+      await _cache.saveJson(key, posts);
+    }
     return posts;
   }
 
@@ -174,7 +188,7 @@ class CreatorService {
     if (coverImageUrl != null) data['cover_image_url'] = coverImageUrl;
     if (scheduledFor != null) data['scheduled_for'] = scheduledFor.toIso8601String();
 
-    final response = await _api.patch('/chronicles/creator/posts/$postId', data: data);
+    final response = await _api.put('/chronicles/creator/posts/$postId', data: data);
     await _invalidatePostCaches();
     return response;
   }
@@ -196,11 +210,15 @@ class CreatorService {
     const key = 'creator_stories';
     if (!forceRefresh) {
       final cached = await _cache.readJson(key);
-      if (cached is List) return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (cached is List && cached.isNotEmpty) {
+        return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
     }
     final response = await _api.get('/chronicles/creator/stories');
     final stories = _listFrom(response);
-    await _cache.saveJson(key, stories);
+    if (stories.isNotEmpty) {
+await _cache.saveJson(key, stories);
+}
     return stories;
   }
 
@@ -251,7 +269,9 @@ class CreatorService {
     const key = 'creator_chains';
     if (!forceRefresh) {
       final cached = await _cache.readJson(key);
-      if (cached is List) return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (cached is List && cached.isNotEmpty) {
+        return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
     }
     final response = await _api.get('/chronicles/creator/chains');
     final chains = _listFrom(response);
@@ -267,7 +287,9 @@ class CreatorService {
     const key = 'creator_reviews';
     if (!forceRefresh) {
       final cached = await _cache.readJson(key);
-      if (cached is List) return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (cached is List && cached.isNotEmpty) {
+        return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
     }
     final response = await _api.get('/chronicles/creator/reviews');
     final reviews = _listFrom(response);
@@ -288,7 +310,7 @@ class CreatorService {
   }
 
   Future<void> markNotificationRead(String notificationId) async {
-    await _api.patch('/chronicles/creator/notifications', data: {'id': notificationId, 'read': true});
+    await _api.post('/chronicles/creator/notifications', data: {'id': notificationId, 'read': true});
     await _cache.remove('creator_notifications');
   }
 
@@ -304,7 +326,7 @@ class CreatorService {
   }
 
   Future<void> updateFeedPreferences(Map<String, dynamic> prefs) async {
-    await _api.patch('/chronicles/creator/feed-preferences', data: prefs);
+    await _api.put('/chronicles/creator/feed-preferences', data: prefs);
     await _cache.remove('creator_feed_prefs');
     await _cache.remove('feed_home');
   }
@@ -375,11 +397,17 @@ class CreatorService {
     final key = 'creator_posts_public_$creatorId';
     if (!forceRefresh) {
       final cached = await _cache.readJson(key);
-      if (cached is List) return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (cached is List && cached.isNotEmpty) {
+        return cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
     }
     final response = await _api.get('/chronicles/creators/$creatorId/posts');
     final posts = _listFrom(response);
-    await _cache.saveJson(key, posts);
+    // Do not cache an empty page: a token-less request returns one, and a
+    // stale empty cache is what made the creator studio look broken.
+    if (posts.isNotEmpty) {
+      await _cache.saveJson(key, posts);
+    }
     return posts;
   }
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/services/chains_service.dart';
 import '../../../core/services/content_cache_service.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/constants/layout.dart';
 
 final _chainsServiceProvider = Provider((ref) => ChainsService(ApiService.instance, ContentCacheService()));
 
@@ -48,7 +49,15 @@ class _WritingChainsScreenState extends ConsumerState<WritingChainsScreen> {
           onPressed: () => context.canPop() ? context.pop() : context.go('/more'),
         ),
       ),
-      floatingActionButton: FloatingActionButton(onPressed: () => context.go('/writing-chains/create'), child: const Icon(Icons.add)),
+      // Nested inside the shell's Scaffold, so the floating bar has to be
+      // cleared by hand or it sits on top of this button.
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: kShellFabClearance),
+        child: FloatingActionButton(
+          onPressed: () => context.go('/writing-chains/create'),
+          child: const Icon(Icons.add),
+        ),
+      ),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -74,6 +83,7 @@ class _WritingChainsScreenState extends ConsumerState<WritingChainsScreen> {
                 childCount: (_tab == 'mine' ? _myChains : _chains).length,
               ),
             ),
+          const SliverToBoxAdapter(child: SizedBox(height: kBottomNavClearance)),
         ],
       ),
     );

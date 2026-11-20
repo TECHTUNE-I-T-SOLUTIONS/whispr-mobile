@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_write_short">Write</string>
+    <string name="shortcut_write_long">Write a chronicle</string>
+    <string name="shortcut_notifications_short">Alerts</string>
+    <string name="shortcut_notifications_long">Open notifications</string>
+    <string name="shortcut_home_short">Home</string>
+    <string name="shortcut_home_long">Open Whispr home</string>
+ <string name="widget_label">Whispr updates</string>
+ <string name="widget_description">Latest Whispr counts and stories at a glance.</string>
+ <string name="widget_loading">Open Whispr to sync</string>
+ <string name="widget_not_synced">Not synced yet</string>
+ <string name="widget_open_alerts">Alerts</string>
+</resources>

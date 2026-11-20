@@ -10,8 +10,8 @@ class GamesProgressService {
   final _client = Supabase.instance.client;
 
   Future<Map<String, dynamic>?> currentCreator() async {
-    final storedSession = await AuthSessionStore.restore();
-    final storedUser = storedSession?.user;
+    // Session bootstrap has already restored storage; do not read it again.
+ final storedUser = AuthSessionStore.currentSession?.user;
     if (storedUser != null && storedUser.id.isNotEmpty) {
       return {
         'id': storedUser.id,

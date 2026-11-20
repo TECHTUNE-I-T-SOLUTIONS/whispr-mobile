@@ -1,98 +1,149 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Internet permission for API calls -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+<!-- Internet permission for API calls -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
-    <application
-        android:label="Whispr"
-        android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
-            android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
-            <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-            <!-- Deep linking intent filters -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Web URLs -->
-                <data
-                    android:scheme="https"
-                    android:host="whisprwords.com"
-                    android:pathPrefix="/chronicles" />
-                <data
-                    android:scheme="https"
-                    android:host="whisprwords.com"
-                    android:pathPrefix="/post" />
-            </intent-filter>
-            <!-- Custom scheme deep linking -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="whispr"
-                    android:host="app" />
-            </intent-filter>
-        </activity>
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
-        <!-- flutter_local_notifications: scheduled + boot-resilient delivery -->
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
-        <!-- FCM: icon used for notifications delivered while the app is in the
-             background or closed. Android renders the small icon as a
-             monochrome silhouette, so this must be the white-on-transparent
-             brand mark (ic_whispr_notification), never the coloured launcher
-             icon - a coloured icon shows up as a solid white blob. -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_whispr_notification" />
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_color"
-            android:resource="@color/notification_accent" />
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
-    </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+<application
+android:label="Whispr"
+android:name="${applicationName}"
+android:icon="@mipmap/launcher_icon">
+<activity
+android:name=".MainActivity"
+android:exported="true"
+android:launchMode="singleTop"
+android:taskAffinity=""
+android:theme="@style/LaunchTheme"
+android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+android:hardwareAccelerated="true"
+android:windowSoftInputMode="adjustResize">
+<!-- Specifies an Android theme to apply to this Activity as soon as
+the Android process has started. This theme is visible to the user
+while the Flutter UI initializes. After that, this theme continues
+to determine the Window background behind the Flutter UI. -->
+<meta-data
+android:name="io.flutter.embedding.android.NormalTheme"
+android:resource="@style/NormalTheme"
+/>
+<!-- Long-press shortcuts route through the same whispr:// links as
+share links and notification taps. -->
+<meta-data
+android:name="android.app.shortcuts"
+android:resource="@xml/shortcuts" />
+<intent-filter>
+<action android:name="android.intent.action.MAIN"/>
+<category android:name="android.intent.category.LAUNCHER"/>
+</intent-filter>
+<!-- Deep linking intent filters -->
+<intent-filter android:autoVerify="true">
+<action android:name="android.intent.action.VIEW" />
+<category android:name="android.intent.category.DEFAULT" />
+<category android:name="android.intent.category.BROWSABLE" />
+<!-- Web URLs. Shared links use the www host, so both spellings
+have to be listed or the link opens the browser instead. -->
+<data
+android:scheme="https"
+android:host="whisprwords.com"
+android:pathPrefix="/chronicles" />
+<data
+android:scheme="https"
+android:host="www.whisprwords.com"
+android:pathPrefix="/chronicles" />
+<data
+android:scheme="https"
+android:host="whisprwords.com"
+android:pathPrefix="/post" />
+<data
+android:scheme="https"
+android:host="www.whisprwords.com"
+android:pathPrefix="/post" />
+<data
+android:scheme="https"
+android:host="whisprwords.com"
+android:pathPrefix="/stories" />
+<data
+android:scheme="https"
+android:host="www.whisprwords.com"
+android:pathPrefix="/stories" />
+</intent-filter>
+<!-- Mobile link resolver: https://whisprwords.com/r/<type>/<id> -->
+<intent-filter android:autoVerify="true">
+<action android:name="android.intent.action.VIEW" />
+<category android:name="android.intent.category.DEFAULT" />
+<category android:name="android.intent.category.BROWSABLE" />
+<data
+android:scheme="https"
+android:host="whisprwords.com"
+android:pathPrefix="/r/" />
+<data
+android:scheme="https"
+android:host="www.whisprwords.com"
+android:pathPrefix="/r/" />
+</intent-filter>
+<!-- Custom scheme deep linking -->
+<intent-filter>
+<action android:name="android.intent.action.VIEW" />
+<category android:name="android.intent.category.DEFAULT" />
+<category android:name="android.intent.category.BROWSABLE" />
+<data
+android:scheme="whispr"
+android:host="app" />
+</intent-filter>
+</activity>
+<!-- Don't delete the meta-data below.
+This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+<!-- flutter_local_notifications: scheduled + boot-resilient delivery -->
+<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+<intent-filter>
+<action android:name="android.intent.action.BOOT_COMPLETED" />
+<action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+<action android:name="android.intent.action.QUICKBOOT_POWERON" />
+<action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+</intent-filter>
+</receiver>
+<!-- Home-screen widget: receives OS update ticks and Dart-to-native pushes. -->
+<receiver
+android:name=".WhisprWidgetProvider"
+android:exported="false"
+android:label="@string/widget_label">
+<intent-filter>
+<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+</intent-filter>
+<meta-data
+android:name="android.appwidget.provider"
+android:resource="@xml/whispr_widget_info" />
+</receiver>
+<!-- FCM: icon used for notifications delivered while the app is in the
+background or closed. Android renders the small icon as a
+monochrome silhouette, so this must be the white-on-transparent
+brand mark (ic_whispr_notification), never the coloured launcher
+icon - a coloured icon shows up as a solid white blob. -->
+<meta-data
+android:name="com.google.firebase.messaging.default_notification_icon"
+android:resource="@drawable/ic_whispr_notification" />
+<meta-data
+android:name="com.google.firebase.messaging.default_notification_color"
+android:resource="@color/notification_accent" />
+<meta-data
+android:name="com.google.firebase.messaging.default_notification_channel_id"
+android:value="whispr_channel" />
+<meta-data
+android:name="flutterEmbedding"
+android:value="2" />
+</application>
+<!-- Required to query activities that can process text, see:
+https://developer.android.com/training/package-visibility and
+https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
-        </intent>
-    </queries>
+In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+<queries>
+<intent>
+<action android:name="android.intent.action.PROCESS_TEXT"/>
+<data android:mimeType="text/plain"/>
+</intent>
+</queries>
 </manifest>

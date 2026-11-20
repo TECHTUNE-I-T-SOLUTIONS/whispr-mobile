@@ -1,3 +1,35 @@
+/// Pulls the first usable image URL out of a post's HTML/markdown body.
+///
+/// The web feed uses the same fallback: a poem or blog written with an image
+/// inline has no `cover_image_url`, so without this the card renders a blank
+/// placeholder even though the post does have media attached.
+String? extractFirstImageFromContent(String? content) {
+  if (content == null || content.isEmpty) return null;
+
+  final htmlMatch = RegExp(
+    r'''<img[^>]+src=["']([^"']+)["']''',
+    caseSensitive: false,
+  ).firstMatch(content);
+  if (htmlMatch != null) {
+    final src = htmlMatch.group(1)?.trim();
+    if (src != null && src.isNotEmpty) return src;
+  }
+
+  final markdownMatch = RegExp(
+    r'!\[[^\]]*\]\(([^)\s]+)',
+  ).firstMatch(content);
+  if (markdownMatch != null) {
+    final src = markdownMatch.group(1)?.trim();
+    if (src != null && src.isNotEmpty) return src;
+  }
+
+  final bareUrl = RegExp(
+    r'https?://[^\s"<>]+\.(?:jpg|jpeg|png|gif|webp|avif)',
+    caseSensitive: false,
+  ).firstMatch(content);
+  return bareUrl?.group(0);
+}
+
 // Unified Post model for feed (admin posts and user chronicles)
 class Post {
   final String id;
@@ -6,6 +38,7 @@ class Post {
   final String? excerpt;
   final String type; // 'blog', 'poem', or 'chronicle'
   final String source; // 'admin' or 'user'
+  final String? category; // author-selected chronicle category
   final bool? featured;
   final int? readingTime;
   final List<String>? tags;
@@ -27,6 +60,7 @@ class Post {
     this.excerpt,
     required this.type,
     required this.source,
+    this.category,
     this.featured,
     this.readingTime,
     this.tags,
@@ -50,10 +84,17 @@ class Post {
       excerpt: json['excerpt'],
       type: json['type'] ?? 'blog',
       source: json['source'] ?? 'admin',
+      category: json['category']?.toString(),
       featured: json['featured'],
       readingTime: json['readingTime'],
       tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
-      coverImage: json['coverImage'] ?? json['coverImageUrl'] ?? json['cover_image_url'],
+      coverImage: json['coverImage'] ??
+        json['coverImageUrl'] ??
+        json['cover_image_url'] ??
+        json['featured_image_url'] ??
+        extractFirstImageFromContent(
+          (json['content'] ?? json['excerpt'])?.toString(),
+        ),
       viewCount: json['viewCount'] ?? json['viewsCount'] ?? json['views_count'],
       likesCount: json['likesCount'] ?? json['likes_count'],
       commentsCount: json['commentsCount'] ?? json['comments_count'],
@@ -73,6 +114,7 @@ class Post {
     String? excerpt,
     String? type,
     String? source,
+    String? category,
     bool? featured,
     int? readingTime,
     List<String>? tags,
@@ -94,6 +136,7 @@ class Post {
       excerpt: excerpt ?? this.excerpt,
       type: type ?? this.type,
       source: source ?? this.source,
+      category: category ?? this.category,
       featured: featured ?? this.featured,
       readingTime: readingTime ?? this.readingTime,
       tags: tags ?? this.tags,
@@ -118,7 +161,8 @@ class Post {
       'excerpt': excerpt,
       'type': type,
       'source': source,
-      'featured': featured,
+      'category': category,
+'featured': featured,
       'readingTime': readingTime,
       'tags': tags,
       'coverImage': coverImage,

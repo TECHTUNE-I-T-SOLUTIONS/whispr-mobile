@@ -4,4 +4,9 @@
          Matches the colour used by AndroidNotificationDetails in
          lib/core/services/push_notification_service.dart. -->
     <color name="notification_accent">#C00000</color>
+ <color name="widget_surface">#FFFDF9F9</color>
+ <color name="widget_border">#33C00000</color>
+ <color name="widget_primary">#FF2B1A1A</color>
+ <color name="widget_secondary">#FF6B5B5B</color>
+ <color name="widget_accent">#FFC00000</color>
 </resources>

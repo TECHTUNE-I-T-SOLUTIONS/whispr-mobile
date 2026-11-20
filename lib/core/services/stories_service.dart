@@ -1,9 +1,41 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'auth_session_store.dart';
 
 class StoriesService {
   StoriesService(this._supabase);
 
   final SupabaseClient _supabase;
+
+  /// The signed-in user's id.
+  ///
+  /// The app signs in through its own JWT API, so `auth.currentUser` is only
+  /// populated once the Supabase session has been restored. When it is not,
+  /// fall back to the `sub` claim of the stored access token so screens do not
+  /// wrongly tell a logged-in user to log in.
+  String? get currentUserId {
+    final fromSession = _supabase.auth.currentUser?.id;
+    if (fromSession != null) return fromSession;
+
+    final token = AuthSessionStore.cachedAccessToken;
+    if (token == null || token.isEmpty) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return null;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map && payload['sub'] is String) {
+        return payload['sub'] as String;
+      }
+    } catch (_) {
+      // Malformed token — treat as signed out.
+    }
+    return null;
+  }
 
   // Get published stories with optional filters
   Future<List<Map<String, dynamic>>> getPublishedStories({
@@ -393,8 +425,8 @@ class StoriesService {
 
   // Get my stories (for current user)
   Future<List<Map<String, dynamic>>> getMyStories() async {
-    final currentUser = _supabase.auth.currentUser;
-    if (currentUser == null) {
+    final userId = currentUserId;
+    if (userId == null) {
       throw Exception('User not authenticated');
     }
 
@@ -402,14 +434,50 @@ class StoriesService {
     final creator = await _supabase
         .from('chronicles_creators')
         .select('id')
-        .eq('user_id', currentUser.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
     if (creator == null) {
       throw Exception('Creator profile not found');
     }
 
-    return getCreatorStories(creator['id']);
+    final stories = await getCreatorStories(creator['id']);
+ if (stories.isEmpty) return stories;
+
+ // `chronicles_stories` has no denormalised chapter counter. Fetch chapters
+ // once for the whole list so the dashboard shows real counts and chapter
+ // details instead of a hard-coded zero.
+ try {
+ final ids = stories
+ .map((story) => story['id']?.toString())
+ .where((id) => id != null && id.isNotEmpty)
+ .cast<String>()
+ .toList();
+ if (ids.isEmpty) return stories;
+
+ final rows = await _supabase
+ .from('chronicles_story_chapters')
+ .select('id,story_id,slug,title,sequence,status,likes_count,comments_count')
+ .filter('story_id', 'in', ids)
+ .order('sequence', ascending: true);
+
+ final byStory = <String, List<Map<String, dynamic>>>{};
+ for (final row in rows) {
+ final storyId = row['story_id']?.toString() ?? '';
+ byStory.putIfAbsent(storyId, () => []).add(Map<String, dynamic>.from(row));
+ }
+
+ for (final story in stories) {
+ final chapters = byStory[story['id']?.toString()] ?? const <Map<String, dynamic>>[];
+ story['chapters'] = chapters;
+ story['chapters_count'] = chapters.length;
+ }
+ } catch (e) {
+ // A chapter lookup must never hide the stories themselves.
+ debugPrint('[StoriesService] chapter counts unavailable: $e');
+ }
+
+ return stories;
   }
 
   // Delete story

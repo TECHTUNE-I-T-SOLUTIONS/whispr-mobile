@@ -143,7 +143,28 @@ workflows:
         script: |
           #!/bin/bash
           set -euo pipefail
-          flutter build apk --release
+
+          # Shorebird auth is one-way: create an API key in Shorebird
+          # (shorebird tokens create) and store it in Codemagic as
+          # SHOREBIRD_TOKEN in the whisprmobile group. Never commit it.
+          if [ -z "${SHOREBIRD_TOKEN:-}" ]; then
+            echo "::error::SHOREBIRD_TOKEN is missing - add the Shorebird API key to the whisprmobile env group"
+            exit 1
+          fi
+
+          if ! command -v shorebird >/dev/null 2>&1; then
+            curl -fsSL https://shorebird.dev/install.sh | bash
+          fi
+          export PATH="$HOME/.shorebird/bin:$PATH"
+          echo 'export PATH="$HOME/.shorebird/bin:$PATH"' >> "$CM_ENV"
+          shorebird --version
+          shorebird account whoami
+
+          # Only one Android release is allowed per version. The APK is
+          # what GitHub users install, so Shorebird builds that one and
+          # patches can target it. The AAB stays a plain Flutter build
+          # until Play signing is configured; it is not patchable.
+          shorebird release android --artifact apk --flutter-version=3.41.5
           flutter build appbundle --release
 
       - name: Publish to GitHub

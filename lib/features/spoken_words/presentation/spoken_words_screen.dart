@@ -9,6 +9,7 @@ import 'dart:convert';
 
 import '../../../core/models/spoken_word.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/constants/layout.dart';
 
 class SpokenWordsScreen extends ConsumerStatefulWidget {
   const SpokenWordsScreen({super.key});
@@ -321,7 +322,7 @@ class _SpokenWordsScreenState extends ConsumerState<SpokenWordsScreen>
         );
       },
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, kBottomNavClearance),
         itemCount: _filteredSpokenWords.length,
         itemBuilder: (context, index) {
           final word = _filteredSpokenWords[index];

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/push_notification_service.dart';
+import '../../../core/services/live_update_service.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Asks for notification permission at the moment it is useful.
@@ -51,6 +54,8 @@ class _NotificationPromptState extends State<NotificationPrompt> {
       if (granted) {
         final hour = prefs.getInt(_reminderTimeKey) ?? 8;
         await PushNotificationService().scheduleDailyChallengeReminder(hour: hour);
+ // Permission just changed; republish the widget and live notification now.
+ unawaited(LiveUpdateService.instance.refresh());
       }
       if (!mounted) return;
       setState(() => _busy = false);

@@ -31,9 +31,25 @@ class PushNotificationService {
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
   StreamSubscription<String>? _tokenRefreshSub;
+String? _subscribedAccountId;
+Future<void>? _subscribeInFlight;
 
   static const int dailyChallengeNotificationId = 7001;
+  static const int dailyChallengeSnoozeId = 7002;
   static const String dailyChallengePayload = 'whispr://daily-challenge';
+  static const String homePayload = 'whispr://app/home';
+  static const String notificationsPayload = 'whispr://app/notifications';
+  static const String loginPayload = 'whispr://login';
+
+  static const String generalChannelId = 'whispr_channel';
+  static const String generalChannelName = 'Whispr Notifications';
+  static const String generalChannelDescription = 'Likes, comments and new posts from Whispr';
+  static const String dailyChannelId = 'whispr_daily';
+  static const String dailyChannelName = 'Daily Challenge';
+  static const String dailyChannelDescription = 'Daily writing prompts and entry reminders';
+
+  static const String openActionId = 'whispr_open';
+  static const String snoozeActionId = 'whispr_snooze';
 
   Future<void> initialize() async {
     // Timezone data is required before any zoned_schedule call below.
@@ -60,8 +76,13 @@ class PushNotificationService {
 
     await _flutterLocalNotificationsPlugin.initialize(
       settings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: _handleNotificationResponse,
     );
+
+    // Declare channels up front so FCM's default channel and local channels
+    // share one identity; otherwise pushes land in an unmanaged FCM channel.
+    await _configureChannels();
 
     // Request permissions. Platform is a dart:io shim on web that throws when
     // read, so it must stay behind kIsWeb.
@@ -83,6 +104,30 @@ class PushNotificationService {
     } else {
       await _initializeFcm();
     }
+  }
+
+  Future<void> _configureChannels() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    final android = _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return;
+
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        generalChannelId,
+        generalChannelName,
+        description: generalChannelDescription,
+        importance: Importance.high,
+      ),
+    );
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        dailyChannelId,
+        dailyChannelName,
+        description: dailyChannelDescription,
+        importance: Importance.high,
+      ),
+    );
   }
 
   /// Boots Firebase Cloud Messaging. Safe to call when Firebase is not
@@ -133,14 +178,17 @@ class PushNotificationService {
       });
 
       // Foreground: Android does not show a notification for FCM messages, so
-      // render it through the local plugin instead.
+      // render it through the local plugin instead. Data-only messages still
+      // carry the link that tells us where a tap should go.
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final notification = message.notification;
-        if (notification == null) return;
+        final data = message.data;
+        final payload = data['link'] as String? ?? data['payload'] as String?;
+        if (notification == null && payload == null && data.isEmpty) return;
         showLocalNotification(
-          title: notification.title ?? 'Whispr',
-          body: notification.body ?? '',
-          payload: message.data['link'] as String?,
+          title: notification?.title ?? data['title']?.toString() ?? 'Whispr',
+          body: notification?.body ?? data['body']?.toString() ?? 'You have a new Whispr notification.',
+          payload: payload,
         );
       });
 
@@ -213,6 +261,7 @@ class PushNotificationService {
       debugPrint('Failed to unregister FCM token: $e');
     } finally {
       _fcmToken = null;
+ _subscribedAccountId = null;
     }
   }
 
@@ -234,7 +283,34 @@ class PushNotificationService {
     }
   }
 
-  Future<void> subscribeToPushNotifications() async {
+  /// Subscribes this device once per account. A second account unregisters the
+/// old token first; a repeated call for the same account is a no-op.
+Future<void> subscribeOnceForAccount(String accountId) async {
+ if (accountId.isEmpty) return;
+ if (_subscribedAccountId == accountId) return;
+
+ final inFlight = _subscribeInFlight;
+ if (inFlight != null) {
+ await inFlight;
+ if (_subscribedAccountId == accountId) return;
+ }
+
+ final future = () async {
+ if (_subscribedAccountId != null && _subscribedAccountId != accountId) {
+ await unregisterToken();
+ }
+ await subscribeToPushNotifications();
+ _subscribedAccountId = accountId;
+ }();
+ _subscribeInFlight = future;
+ try {
+ await future;
+ } finally {
+ if (identical(_subscribeInFlight, future)) _subscribeInFlight = null;
+ }
+}
+
+Future<void> subscribeToPushNotifications() async {
     if (kIsWeb) {
       await _subscribeWebPush();
       return;
@@ -305,10 +381,11 @@ class PushNotificationService {
   }) async {
     try {
       final androidDetails = AndroidNotificationDetails(
-        'whispr_channel',
-        'Whispr Notifications',
-        channelDescription: 'Notifications from Whispr',
-        importance: Importance.max,
+        generalChannelId,
+        generalChannelName,
+        channelDescription: generalChannelDescription,
+        channelAction: AndroidNotificationChannelAction.update,
+        importance: Importance.high,
         priority: Priority.high,
         showWhen: true,
         // Status-bar silhouette (white on transparent).
@@ -341,10 +418,11 @@ class PushNotificationService {
       // Fallback: show notification without custom icon
       try {
         final androidDetailsFallback = AndroidNotificationDetails(
-          'whispr_channel',
-          'Whispr Notifications',
-          channelDescription: 'Notifications from Whispr',
-          importance: Importance.max,
+          generalChannelId,
+          generalChannelName,
+          channelDescription: generalChannelDescription,
+          channelAction: AndroidNotificationChannelAction.update,
+          importance: Importance.high,
           priority: Priority.high,
           showWhen: true,
           largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
@@ -376,23 +454,20 @@ class PushNotificationService {
     }
   }
 
-  void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('Notification tapped: ${response.payload}');
-    NotificationRouter.handle(response.payload);
-  }
-
+  // Authentication notifications
   Future<void> sendTestNotification() async {
     await showLocalNotification(
       title: 'Test Notification',
       body: 'This is a test push notification from Whispr!',
+      payload: homePayload,
     );
   }
 
-  // Authentication notifications
   Future<void> showLoginSuccessNotification() async {
     await showLocalNotification(
       title: 'Welcome back!',
       body: 'You have successfully logged in to Whispr.',
+      payload: homePayload,
     );
   }
 
@@ -400,6 +475,7 @@ class PushNotificationService {
     await showLocalNotification(
       title: 'Welcome to Whispr!',
       body: 'Your account has been created successfully.',
+      payload: homePayload,
     );
   }
 
@@ -407,6 +483,7 @@ class PushNotificationService {
     await showLocalNotification(
       title: 'Password Reset',
       body: 'Your password has been reset successfully.',
+      payload: loginPayload,
     );
   }
 
@@ -414,6 +491,7 @@ class PushNotificationService {
     await showLocalNotification(
       title: 'Signed Out',
       body: 'You have been signed out from Whispr.',
+      payload: loginPayload,
     );
   }
 
@@ -421,43 +499,49 @@ class PushNotificationService {
     await showLocalNotification(
       title: 'Session Expired',
       body: 'Your session has expired. Please sign in again to continue.',
+      payload: loginPayload,
     );
   }
 
   // Content notifications
-  Future<void> showNewPostNotification(String authorName, String postType) async {
+  Future<void> showNewPostNotification(String authorName, String postType, {String? link}) async {
     await showLocalNotification(
       title: 'New $postType Posted',
       body: '$authorName just published a new $postType. Check it out!',
+      payload: link ?? homePayload,
     );
   }
 
-  Future<void> showNewChainNotification(String authorName) async {
+  Future<void> showNewChainNotification(String authorName, {String? link}) async {
     await showLocalNotification(
       title: 'New Writing Chain',
       body: '$authorName started a new writing chain. Join the conversation!',
+      payload: link ?? 'whispr://app/writing-chains',
     );
   }
 
   // Engagement notifications
-  Future<void> showLikeNotification(String likerName, String contentType) async {
+  Future<void> showLikeNotification(String likerName, String contentType, {String? link}) async {
     await showLocalNotification(
       title: 'New Like',
       body: '$likerName liked your $contentType.',
+      payload: link ?? notificationsPayload,
     );
   }
 
-  Future<void> showCommentNotification(String commenterName, String contentType) async {
+  Future<void> showCommentNotification(String commenterName, String contentType, {String? link}) async {
     await showLocalNotification(
       title: 'New Comment',
       body: '$commenterName commented on your $contentType.',
+      payload: link ?? notificationsPayload,
     );
   }
 
-  Future<void> showChainEntryNotification(String authorName, String chainTitle) async {
+  Future<void> showChainEntryNotification(String authorName, String chainTitle, {String? link}) async {
     await showLocalNotification(
       title: 'New Chain Entry',
       body: '$authorName added to the writing chain "$chainTitle".',
+      payload: link ?? notificationsPayload,
     );
   }
 
@@ -466,6 +550,7 @@ class PushNotificationService {
     await showLocalNotification(
       title: 'Welcome to Whispr',
       body: 'Start exploring amazing content from our creative community!',
+      payload: homePayload,
     );
   }
 
@@ -473,17 +558,16 @@ class PushNotificationService {
     await showLocalNotification(
       title: 'Daily Writing Reminder',
       body: 'Don\'t forget to check out today\'s featured content and share your thoughts!',
+      payload: dailyChallengePayload,
     );
   }
 
   // ---------------------------------------------------------------------------
   // Daily challenge reminders
   //
-  // The reason push was "removed for now" is that mobile had no delivery path:
-  // subscribeToPushNotifications() only did anything on web. A scheduled local
-  // notification needs no server or Firebase project and gives a real, testable
-  // daily nudge today; an FCM push can be layered on top later without
-  // changing any of the call sites below.
+  // A scheduled local notification needs no server or Firebase project and
+  // gives a real, testable daily nudge today; FCM can be layered on top later
+  // without changing any of the call sites below.
   // ---------------------------------------------------------------------------
 
   /// Asks the OS for notification permission and returns whether it is granted.
@@ -532,15 +616,20 @@ class PushNotificationService {
     try {
       await _flutterLocalNotificationsPlugin.cancel(dailyChallengeNotificationId);
 
-      final androidDetails = const AndroidNotificationDetails(
-        'whispr_daily',
-        'Daily Challenge',
-        channelDescription: 'Daily writing prompts and entry reminders',
+      final androidDetails = AndroidNotificationDetails(
+        dailyChannelId,
+        dailyChannelName,
+        channelDescription: dailyChannelDescription,
+        channelAction: AndroidNotificationChannelAction.update,
         importance: Importance.high,
         priority: Priority.high,
         showWhen: true,
         icon: 'ic_whispr_notification',
-        largeIcon: DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(openActionId, 'Open', showsUserInterface: true),
+          AndroidNotificationAction(snoozeActionId, 'Snooze 10 min'),
+        ],
       );
       const darwinDetails = DarwinNotificationDetails(
         presentAlert: true,
@@ -565,10 +654,54 @@ class PushNotificationService {
     }
   }
 
+  /// One-off nudge created by the notification's Snooze action. Kept on a
+  /// separate id so cancelling the repeating reminder does not cancel it.
+  Future<void> snoozeDailyChallengeReminder() async {
+    if (kIsWeb) return;
+    try {
+      await _flutterLocalNotificationsPlugin.cancel(dailyChallengeSnoozeId);
+      final androidDetails = AndroidNotificationDetails(
+        dailyChannelId,
+        dailyChannelName,
+        channelDescription: dailyChannelDescription,
+        channelAction: AndroidNotificationChannelAction.update,
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+        icon: 'ic_whispr_notification',
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(openActionId, 'Open', showsUserInterface: true),
+          AndroidNotificationAction(snoozeActionId, 'Snooze 10 min'),
+        ],
+      );
+      const darwinDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      await _flutterLocalNotificationsPlugin.zonedSchedule(
+        dailyChallengeSnoozeId,
+        "Today's whisper is waiting",
+        'Snoozed reminder: open Whispr and claim your streak.',
+        tz.TZDateTime.now(tz.local).add(const Duration(minutes: 10)),
+        NotificationDetails(android: androidDetails, iOS: darwinDetails),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: dailyChallengePayload,
+      );
+      debugPrint('[PushNotifications] daily reminder snoozed for 10 minutes');
+    } catch (e) {
+      debugPrint('[PushNotifications] failed to snooze daily reminder: $e');
+    }
+  }
+
   Future<void> cancelDailyChallengeReminder() async {
     if (kIsWeb) return;
     try {
       await _flutterLocalNotificationsPlugin.cancel(dailyChallengeNotificationId);
+      await _flutterLocalNotificationsPlugin.cancel(dailyChallengeSnoozeId);
     } catch (e) {
       debugPrint('[PushNotifications] failed to cancel daily reminder: $e');
     }
@@ -582,4 +715,15 @@ class PushNotificationService {
     }
     return scheduled;
   }
+}
+
+/// Top-level so background action taps can invoke it after a cold start.
+@pragma('vm:entry-point')
+void _handleNotificationResponse(NotificationResponse response) {
+  debugPrint('[PushNotifications] action=${response.actionId} payload=${response.payload}');
+  if (response.actionId == PushNotificationService.snoozeActionId) {
+    unawaited(PushNotificationService().snoozeDailyChallengeReminder());
+    return;
+  }
+  NotificationRouter.handle(response.payload);
 }
