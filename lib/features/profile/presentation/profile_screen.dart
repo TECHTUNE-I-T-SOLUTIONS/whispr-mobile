@@ -878,7 +878,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with TickerProvid
               ),
             ),
             child: Text(
-              'Version 2.2.1',
+              'Version 2.1.2+10',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/services/daily_challenge_service.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Today's writing challenge — the first thing on the home screen.
+/// Today's writing prompt — the one deliberate focal point on the home screen.
 ///
-/// Shows the streak, the prompt and one clear action. When the challenge is
-/// already done it becomes a quiet "you're done today" card instead of
-/// disappearing, so the streak stays visible.
+/// Collapsed, it is a compact card with the streak, the prompt and one action.
+/// Expanding reveals the brief and the last entry without pushing the rest of
+/// the home screen into a second full page of decoration.
 class DailyChallengeCard extends StatefulWidget {
   final DailyChallengeState state;
   final VoidCallback onEnter;
@@ -34,57 +33,49 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final s = widget.state;
     final done = s.completedToday;
+    final background = done
+        ? (isDark ? const Color(0xFF142017) : const Color(0xFFF0F6F0))
+        : (isDark ? const Color(0xFF261113) : AppTheme.primaryColor);
+    final foreground = done
+        ? (isDark ? Colors.white : const Color(0xFF151212))
+        : Colors.white;
+    final muted = done
+        ? (isDark ? Colors.white60 : Colors.black54)
+        : Colors.white.withValues(alpha: 0.74);
+
+    final imageUrl = s.challenge.imageUrl;
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return AnimatedContainer(
       duration: AppTheme.mediumAnimation,
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusXL),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: done
-              ? [
-                  (isDark ? const Color(0xFF1B2A1D) : const Color(0xFFEAF5EB)),
-                  (isDark ? const Color(0xFF121914) : Colors.white),
-                ]
-              : isDark
-                  ? [const Color(0xFF2A0F10), const Color(0xFF120A0A)]
-                  : [AppTheme.primaryColor, const Color(0xFF5E0E0F)],
-        ),
-        border: Border.all(
-          color: done
-              ? const Color(0xFF3E7A44).withValues(alpha: 0.35)
-              : Colors.white.withValues(alpha: 0.14),
-        ),
-        boxShadow: [
-          if (!done)
-            BoxShadow(
-              color: AppTheme.primaryColor.withValues(alpha: isDark ? 0.28 : 0.32),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
-            ),
-        ],
+        color: background,
+        borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
+        border: done
+            ? Border.all(
+                color: const Color(
+                  0xFF3E7A44,
+                ).withValues(alpha: isDark ? 0.4 : 0.22),
+              )
+            : null,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppTheme.borderRadiusXL),
+          borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
           onTap: () => setState(() => _expanded = !_expanded),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
+            padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Challenges created in the admin/cron pipeline carry a
-                // featured image; show it so the card matches the web.
-                if (s.challenge.imageUrl != null &&
-                    s.challenge.imageUrl!.isNotEmpty) ...[
+                if (_expanded && hasImage) ...[
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusL),
+                    borderRadius: BorderRadius.circular(12),
                     child: Image.network(
-                      s.challenge.imageUrl!,
-                      height: _expanded ? 180 : 120,
+                      imageUrl,
+                      height: 132,
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
@@ -97,67 +88,73 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
                   children: [
                     _streakChip(s.currentStreak, done, isDark),
                     const Spacer(),
-                    _metaChip(s.challenge.form, done),
-                    const SizedBox(width: 6),
+                    _metaChip(s.challenge.form, done, isDark),
+                    const SizedBox(width: 2),
                     Icon(
-                      _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                      size: 20,
-                      color: done ? (isDark ? Colors.white38 : Colors.black38) : Colors.white54,
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: muted,
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Text(
                   done ? 'Done for today' : "Today's whisper",
                   style: TextStyle(
-                    fontSize: 12,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w800,
-                    color: done
-                        ? (isDark ? Colors.white54 : Colors.black45)
-                        : Colors.white.withValues(alpha: 0.72),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: muted,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   s.challenge.prompt,
                   maxLines: _expanded ? null : 3,
                   overflow: _expanded ? null : TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: 'serif',
-                    fontSize: _expanded ? 19 : 18,
-                    height: 1.42,
+                    fontFamily: AppTheme.serifFamily,
+                    fontSize: 19,
+                    height: 1.35,
                     fontWeight: FontWeight.w600,
-                    color: done ? (isDark ? Colors.white70 : Colors.black87) : Colors.white,
+                    color: foreground,
                   ),
                 ),
                 if (_expanded) ...[
                   const SizedBox(height: 14),
                   _detailRow('Kicker', s.challenge.kicker, done, isDark),
-                  _detailRow('Length', '${s.challenge.wordTarget} words', done, isDark),
+                  _detailRow(
+                    'Length',
+                    '${s.challenge.wordTarget} words',
+                    done,
+                    isDark,
+                  ),
                   _detailRow('Reward', '+${s.challenge.xp} XP', done, isDark),
                   if (s.lastEntryPreview != null && done) ...[
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(AppTheme.borderRadiusM),
+                        color: done
+                            ? (isDark
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.black.withValues(alpha: 0.04))
+                            : Colors.white.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         '“${s.lastEntryPreview}”',
                         style: TextStyle(
-                          fontFamily: 'serif',
+                          fontFamily: AppTheme.serifFamily,
                           fontStyle: FontStyle.italic,
                           fontSize: 14,
                           height: 1.45,
-                          color: isDark ? Colors.white60 : Colors.black54,
+                          color: muted,
                         ),
                       ),
                     ),
                   ],
                 ],
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 Row(
                   children: [
                     Expanded(
@@ -167,22 +164,32 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
                           widget.onEnter();
                         },
                         style: FilledButton.styleFrom(
-                          backgroundColor: done ? (isDark ? Colors.white12 : Colors.black) : Colors.white,
-                          foregroundColor: done ? (isDark ? Colors.white : Colors.white) : AppTheme.primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppTheme.primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         child: Text(done ? 'Write another' : 'Start writing'),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      tooltip: 'Refresh',
-                      onPressed: widget.onRefresh,
-                      icon: Icon(
-                        Icons.refresh_rounded,
-                        color: done ? (isDark ? Colors.white38 : Colors.black38) : Colors.white70,
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        tooltip: 'Refresh',
+                        onPressed: widget.onRefresh,
+                        icon: Icon(
+                          Icons.refresh_rounded,
+                          size: 19,
+                          color: muted,
+                        ),
                       ),
                     ),
                   ],
@@ -197,35 +204,36 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
 
   Widget _streakChip(int streak, bool done, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: done
-            ? const Color(0xFF3E7A44).withValues(alpha: isDark ? 0.24 : 0.12)
-            : Colors.white.withValues(alpha: 0.15),
+            ? const Color(0xFF3E7A44).withValues(alpha: isDark ? 0.24 : 0.1)
+            : Colors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(
-          color: done
-              ? const Color(0xFF3E7A44).withValues(alpha: 0.5)
-              : Colors.white.withValues(alpha: 0.24),
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            streak > 0 ? Icons.local_fire_department_rounded : Icons.local_fire_department_outlined,
-            size: 15,
+            streak > 0
+                ? Icons.local_fire_department_rounded
+                : Icons.local_fire_department_outlined,
+            size: 14,
             color: streak > 0
-                ? (done ? const Color(0xFF6FCF7C) : const Color(0xFFFFB74D))
-                : (done ? (isDark ? Colors.white38 : Colors.black38) : Colors.white60),
+                ? (done ? const Color(0xFF3E7A44) : const Color(0xFFFFCC80))
+                : (done ? Colors.black38 : Colors.white70),
           ),
           const SizedBox(width: 5),
           Text(
-            streak > 0 ? '$streak day${streak == 1 ? '' : 's'}' : 'Start your streak',
+            streak > 0
+                ? '$streak day${streak == 1 ? '' : 's'}'
+                : 'Start your streak',
             style: TextStyle(
-              fontSize: 12.5,
+              fontSize: 11.5,
               fontWeight: FontWeight.w700,
-              color: done ? (isDark ? Colors.white70 : Colors.black87) : Colors.white,
+              color: done
+                  ? (isDark ? Colors.white70 : const Color(0xFF2F5E34))
+                  : Colors.white,
             ),
           ),
         ],
@@ -233,14 +241,14 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
     );
   }
 
-  Widget _metaChip(String label, bool done) {
+  Widget _metaChip(String label, bool done, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: done
-            ? (Theme.of(context).brightness == Brightness.dark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.05))
+            ? (isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.05))
             : Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(99),
       ),
@@ -249,10 +257,9 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
           color: done
-              ? (Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54)
-              : Colors.white.withValues(alpha: 0.85),
+              ? (isDark ? Colors.white60 : Colors.black54)
+              : Colors.white.withValues(alpha: 0.9),
         ),
       ),
     );
@@ -264,13 +271,14 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
       child: Row(
         children: [
           SizedBox(
-            width: 70,
+            width: 66,
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                letterSpacing: 0.4,
-                color: done ? (isDark ? Colors.white38 : Colors.black38) : Colors.white54,
+                fontSize: 11.5,
+                color: done
+                    ? (isDark ? Colors.white38 : Colors.black38)
+                    : Colors.white54,
               ),
             ),
           ),
@@ -278,53 +286,13 @@ class _DailyChallengeCardState extends State<DailyChallengeCard> {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w600,
-                color: done ? (isDark ? Colors.white70 : Colors.black87) : Colors.white,
+                color: done
+                    ? (isDark ? Colors.white70 : Colors.black87)
+                    : Colors.white,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Small streak strip shown above the challenge when a streak exists.
-class StreakStrip extends StatelessWidget {
-  final int current;
-  final int best;
-
-  const StreakStrip({super.key, required this.current, required this.best});
-
-  @override
-  Widget build(BuildContext context) {
-    if (current == 0 && best == 0) return const SizedBox.shrink();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Text(
-            current > 0 ? '$current-day streak' : 'Best streak: $best',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white54 : Colors.black45,
-            ),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: () => context.go('/games'),
-            icon: const Icon(Icons.emoji_events_outlined, size: 15),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: const Size(0, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            label: const Text('Games', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
           ),
         ],
       ),

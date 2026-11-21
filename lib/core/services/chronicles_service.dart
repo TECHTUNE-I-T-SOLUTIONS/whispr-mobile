@@ -98,4 +98,33 @@ class ChroniclesService {
     final response = await _apiService.get('/chronicles/creators/$creatorId/posts');
     return (response['posts'] as List?) ?? const [];
   }
+
+  /// Discover all public creators
+  Future<List<dynamic>> getCreatorsDiscover({bool forceRefresh = false}) async {
+    if (!forceRefresh) {
+      final cached = await _cacheService.readJson('creators_discover');
+      if (cached is List && cached.isNotEmpty) return cached;
+    }
+    final response = await _apiService.get('/chronicles/creators/discover');
+    final creators = (response['creators'] as List?) ?? const [];
+    if (creators.isNotEmpty) {
+      await _cacheService.saveJson('creators_discover', creators);
+    }
+    return creators;
+  }
+
+  /// Follow or unfollow a creator
+  Future<Map<String, dynamic>> followCreator(String creatorId) async {
+    final response = await _apiService.post(
+      '/chronicles/creators/follow',
+      data: {'creatorId': creatorId},
+    );
+    return Map<String, dynamic>.from(response);
+  }
+
+  /// Get specific creator details
+  Future<Map<String, dynamic>> getCreatorDetails(String creatorId) async {
+    final response = await _apiService.get('/chronicles/creators/$creatorId');
+    return Map<String, dynamic>.from(response);
+  }
 }

@@ -10,6 +10,7 @@ import '../../features/chronicles/presentation/chronicle_categories_screen.dart'
 import '../../features/chronicles/presentation/chronicles_screen.dart';
 import '../../features/chronicles/presentation/create_chronicles_post_screen.dart';
 import '../../features/chronicles/presentation/chronicles_post_detail_screen.dart';
+import '../../features/chronicles/presentation/creators_discovery_screen.dart';
 import '../../features/ai_chat/presentation/ai_chat_screen.dart';
 import '../../features/whispr_wall/presentation/whispr_wall_screen.dart';
 import '../../features/writing_chains/presentation/writing_chains_screen.dart';
@@ -114,6 +115,7 @@ final router = GoRouter(
     // Allow access to main browsing routes even when not logged in
     final isPublicRoute = location == '/home' ||
                           location == '/chronicles' ||
+                          location == '/chronicles/creators' ||
                           location == '/whispr-wall' ||
                           location == '/notifications' ||
                           location == '/games' ||
@@ -184,6 +186,10 @@ final router = GoRouter(
         GoRoute(
           path: '/chronicles',
           builder: (context, state) => const ChroniclesScreen(),
+        ),
+        GoRoute(
+          path: '/chronicles/creators',
+          builder: (context, state) => const CreatorsDiscoveryScreen(),
         ),
         GoRoute(
           path: '/chronicles/create',

@@ -86,13 +86,18 @@ class _ChroniclesScreenState extends ConsumerState<ChroniclesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chronicles'),
- actions: [
- IconButton(
- tooltip: 'Browse categories',
- icon: const Icon(Icons.category_outlined),
- onPressed: () => context.push('/chronicles/categories'),
- ),
- ],
+        actions: [
+          IconButton(
+            tooltip: 'Discover creators',
+            icon: const Icon(Icons.people_outline),
+            onPressed: () => context.push('/chronicles/creators'),
+          ),
+          IconButton(
+            tooltip: 'Browse categories',
+            icon: const Icon(Icons.category_outlined),
+            onPressed: () => context.push('/chronicles/categories'),
+          ),
+        ],
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.canPop() ? context.pop() : context.go('/more'),

@@ -38,7 +38,6 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
   final List<Map<String, dynamic>> _chains = [];
   CreatorStats _stats = const CreatorStats();
   bool _loading = true;
-  bool _following = false;
   String? _error;
 
   @override
@@ -74,7 +73,6 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
         _creator = creator;
         _posts = results.first;
         _stats = CreatorStats.fromJson(creator);
-        _following = creator['is_following'] == true || creator['isFollowing'] == true;
         _loading = false;
       });
     } on CreatorNotFoundException {
@@ -99,22 +97,6 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
       'Read $penName on Whispr\nhttps://whisprwords.com/chronicles/portfolio/$penName',
       subject: '$penName on Whispr',
     );
-  }
-
-  Future<void> _toggleFollow() async {
-    final creatorId = _creator?['id']?.toString();
-    if (creatorId == null || creatorId.isEmpty) return;
-    final next = !_following;
-    setState(() => _following = next);
-    try {
-      await ref.read(_creatorServiceProvider).followCreator(creatorId, follow: next);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _following = !next);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update follow. Try again.')),
-      );
-    }
   }
 
   @override
@@ -311,39 +293,16 @@ class _PortfolioScreenState extends ConsumerState<PortfolioScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _toggleFollow,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: _following ? 0.5 : 0.3),
-                    ),
-                    backgroundColor: _following ? Colors.transparent : Colors.white.withValues(alpha: 0.12),
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                    textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-                  ),
-                  child: Text(_following ? 'Following' : 'Follow'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _sharePortfolio,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppTheme.primaryColor,
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                    textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-                  ),
-                  child: const Text('Share'),
-                ),
-              ),
-            ],
+          FilledButton(
+            onPressed: _sharePortfolio,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primaryColor,
+              minimumSize: const Size(double.infinity, 40),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+              textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+            ),
+            child: const Text('Share'),
           ),
         ],
       ),
